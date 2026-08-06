@@ -3,7 +3,7 @@
    Design rules:
      1. Never store a total. Totals are always derived from the ledger.
      2. Never edit or delete. Corrections are new signed events.
-     3. Never trust the device clock. GitHub's HTTP Date header is truth.
+     3. Never trust the device clock. GitHub's server clock is truth.
      4. Never credit time the app wasn't alive for.
    ══════════════════════════════════════════════════════════════ */
 
@@ -11,6 +11,8 @@
 
 /* ── the immovable deadline: 2027-07-13 00:00 IST ── */
 const TARGET = Date.UTC(2027, 6, 12, 18, 30, 0);
+const START  = Date.UTC(2026, 6, 13, 18, 30, 0);   // one year before target
+const GRID_FROM = [2026, 7, 6];                    // first day of the grid
 
 const CAP_SESSION   = 5 * 3600e3;   // max single session
 const CAP_DAY       = 16 * 3600e3;  // max credited per day
@@ -18,7 +20,7 @@ const CAP_ADJ_DAY   = 2 * 3600e3;   // max |net adjustment| per day
 const ACCRUE_EVERY  = 10e3;         // accrual tick
 const ACCRUE_CLAMP  = 60e3;         // max credit per tick (throttle tolerance)
 const STALE_AFTER   = 5 * 60e3;     // dead session cutoff
-const SKEW_LIMIT    = 120e3;        // refuse to record beyond this clock skew
+const SKEW_LIMIT    = 120e3;        // warn beyond this clock skew
 
 /* ══════════ storage ══════════ */
 const K = {
@@ -77,25 +79,38 @@ async function sha256(s){
 const canon = (e, prev) =>
   [e.i, e.t, e.at, e.day, e.ms, e.note || '', e.flags || '', prev].join('|');
 
+/* Cached so the chain isn't re-hashed on every 1s render tick. Any mutation
+   path must call invalidate(). */
+let chainOk = null;
+const invalidate = () => { chainOk = null; };
+
 async function append(ev){
   const prev = chain.length ? chain[chain.length-1].h : 'genesis';
   ev.i = chain.length;
   ev.h = await sha256(canon(ev, prev));
   chain.push(ev);
   save(K.chain, chain);
+  invalidate();
   return ev;
 }
-async function verifyChain(){
+
+/* Verifies `evs` (default: the live chain). Returns {ok, at}. */
+async function verifyChain(evs){
+  const list = evs || chain;
   let prev = 'genesis';
-  for (let i = 0; i < chain.length; i++){
-    const e = chain[i];
-    if (e.i !== i) return { ok:false, at:i };
+  for (let i = 0; i < list.length; i++){
+    const e = list[i];
+    if (!e || e.i !== i) return { ok:false, at:i };
     if (await sha256(canon(e, prev)) !== e.h) return { ok:false, at:i };
     prev = e.h;
   }
   return { ok:true, at:-1 };
 }
-const head = () => chain.length ? chain[chain.length-1].h.slice(0,8) : '—';
+async function verifyCached(){
+  if (!chainOk) chainOk = await verifyChain();
+  return chainOk;
+}
+const head = () => chain.length ? chain[chain.length-1].h.slice(0,8) : null;
 
 /* ══════════ derived totals (never stored) ══════════ */
 const dayKey = ms => {
@@ -114,24 +129,28 @@ const adjNetForDay = d =>
 
 /* ══════════ formatting ══════════ */
 const nf = new Intl.NumberFormat('en-US');
+
+/* Rounds to whole minutes BEFORE splitting, so 59.7min reads "1h 00m" and
+   never "60m". Splitting first produced "2h 60m" in the pace readout. */
 function hm(ms){
-  const neg = ms < 0; ms = Math.abs(ms);
-  const h = Math.floor(ms/3600e3), m = Math.round(ms%3600e3/60e3);
-  return (neg?'−':'') + (h ? `${h}h ${String(m).padStart(2,'0')}m` : `${m}m`);
+  const neg = ms < 0;
+  let m = Math.round(Math.abs(ms) / 60e3);
+  const h = Math.floor(m / 60); m -= h * 60;
+  return (neg ? '-' : '') + (h ? `${h}h ${String(m).padStart(2,'0')}m` : `${m}m`);
 }
 const hhmmss = ms => {
-  ms = Math.max(0, ms);
-  const s = Math.floor(ms/1000);
+  const s = Math.floor(Math.max(0, ms) / 1000);
   return [Math.floor(s/3600), Math.floor(s%3600/60), s%60]
     .map(v => String(v).padStart(2,'0')).join(':');
 };
 const hhmm = ms => new Date(ms).toTimeString().slice(0,5);
+const clock = ms => new Date(ms).toTimeString().slice(0,8);
 
 /* ══════════ session (live) ══════════ */
 function startSession(){
   const now = Time.now();
-  if (dayTotal(dayKey(now)) >= CAP_DAY) return toast(`day cap reached — 16h max`);
-  if (!Time.synced) toast('offline — session will be flagged');
+  if (dayTotal(dayKey(now)) >= CAP_DAY) return toast('day cap reached, 16h is the max');
+  if (!Time.synced) toast('offline, this session will be flagged');
   session = {
     startAt: now, acc: 0,
     lastMono: performance.now(), lastWall: Date.now(), lastAliveWall: now,
@@ -141,10 +160,16 @@ function startSession(){
   render();
 }
 
+/* Live credited ms, including the part of the current tick already elapsed.
+   Clamped at 0 because after a reload lastMono belongs to the previous page
+   life, so the delta can be negative until reviveSession() rebases it. */
+const liveMs = () => !session ? 0
+  : session.acc + Math.min(Math.max(performance.now() - session.lastMono, 0), ACCRUE_CLAMP);
+
 /* One accrual tick. Credits monotonic elapsed, clamped, and flags any
    divergence between the wall clock and the monotonic clock. */
 function accrue(){
-  if (!session) return;
+  if (!session || closing) return;
   const mono = performance.now(), wall = Date.now();
   const dMono = mono - session.lastMono;
   const dWall = wall - session.lastWall;
@@ -153,38 +178,51 @@ function accrue(){
   session.lastMono = mono; session.lastWall = wall;
   session.lastAliveWall = Time.now();
   save(K.session, session);
-  if (session.acc >= CAP_SESSION){ stopSession(true); toast('5h cap — session closed'); }
+  if (session.acc >= CAP_SESSION) stopSession(true, '5h cap reached, session closed');
 }
 
-async function stopSession(auto){
-  if (!session) return;
-  if (!auto) accrue();
-  const ms = Math.round(session.acc / 60e3) * 60e3;         // whole minutes
-  const day = dayKey(session.startAt);
-  const room = Math.max(0, CAP_DAY - dayTotal(day));
-  const credited = Math.min(ms, room);
-  const flags = [session.offline && 'offline', session.tampered && 'clock', auto && 'auto']
-    .filter(Boolean).join(',');
-  if (credited > 0){
-    await append({
-      t:'work', at:new Date(Time.now()).toISOString(), day, ms:credited,
-      note:`${hhmm(session.startAt)}→${hhmm(Time.now())}`, flags,
-    });
-  }
-  session = null; localStorage.removeItem(K.session);
-  render(); pushSoon();
-  if (credited > 0 && !auto) toast(`+${hm(credited)} banked`);
+/* Re-entrancy guard: stopSession awaits append() before clearing `session`,
+   so without this an accrual tick firing inside that window would bank the
+   same session twice. */
+let closing = false;
+
+async function stopSession(auto, why){
+  if (!session || closing) return;
+  closing = true;
+  try {
+    if (!auto) accrue();
+    const day = dayKey(session.startAt);
+    const ms = Math.round(session.acc / 60e3) * 60e3;         // whole minutes
+    const room = Math.max(0, CAP_DAY - dayTotal(day));
+    const credited = Math.min(ms, room);
+    const flags = [session.offline && 'offline', session.tampered && 'clock', auto && 'auto']
+      .filter(Boolean).join(',');
+    if (credited > 0){
+      await append({
+        t:'work', at:new Date(Time.now()).toISOString(), day, ms:credited,
+        note:`${hhmm(session.startAt)}-${hhmm(Time.now())}`, flags,
+      });
+    }
+    session = null; localStorage.removeItem(K.session);
+    render(); pushSoon();
+    // Never let time vanish silently: say what happened, including the
+    // uncomfortable cases (rounded to nothing, or refused by the day cap).
+    if (why) toast(why);
+    else if (credited > 0) toast(`banked ${hm(credited)}`);
+    else if (ms > 0) toast(`day cap full, ${hm(ms)} could not be banked`);
+    else toast('under a minute, nothing banked');
+  } finally { closing = false; }
 }
 
 /* Resume-or-bury on load: a session with no heartbeat for 5min means the app
    was closed. Credit only what it was alive for. */
 async function reviveSession(){
-  if (!session) return;
+  if (!session || closing) return;
   const gap = Time.now() - (session.lastAliveWall || session.startAt);
   if (gap > STALE_AFTER){
-    const was = session.acc;
-    await stopSession(true);
-    if (was > 60e3) toast(`dead session buried · +${hm(Math.round(was/60e3)*60e3)}`);
+    const was = Math.round(session.acc / 60e3) * 60e3;
+    await stopSession(true, was > 0 ? `app was closed, banked the ${hm(was)} it was open for`
+                                    : 'app was closed, nothing to bank');
   } else {
     session.lastMono = performance.now(); session.lastWall = Date.now();
     save(K.session, session);
@@ -194,34 +232,42 @@ async function reviveSession(){
 /* ══════════ adjustments ══════════ */
 let adjOffset = 0, adjSign = 1;
 
+/* Reads the h/m inputs defensively: a pasted or spun value can be negative,
+   fractional or absurd even with min/max on the element. */
+const readAmount = () => {
+  const n = id => Math.min(Math.floor(Math.abs(+$(id).value || 0)), 999);
+  return n('adjH') * 3600e3 + n('adjM') * 60e3;
+};
+
 async function applyAdjust(){
+  if (adjOffset !== 0 && adjOffset !== 1) return toast('today or yesterday only');
   if (!Time.synced && !confirm('Clock unverified (offline). Append anyway?')) return;
+
   const now = Time.now();
   const d = new Date(now); d.setDate(d.getDate() - adjOffset);
   const day = dayKey(d.getTime());
 
-  if (adjOffset !== 0 && adjOffset !== 1) return toast('today or yesterday only');
-
-  const h = +($('adjH').value || 0), m = +($('adjM').value || 0);
-  const delta = adjSign * (h*3600e3 + m*60e3);
-  if (!delta) return toast('enter an amount');
+  const delta = adjSign * readAmount();
+  if (!delta) return toast('enter an amount first');
 
   const net = adjNetForDay(day);
   if (Math.abs(net + delta) > CAP_ADJ_DAY)
-    return toast(`±2h/day cap — ${hm(net)} already adjusted`);
-  if (dayTotal(day) + delta < 0) return toast(`can't go below zero for that day`);
-  if (dayTotal(day) + delta > CAP_DAY) return toast('would exceed 16h day cap');
+    return toast(`2h adjustment cap, ${hm(net)} already applied that day`);
+  if (dayTotal(day) + delta < 0) return toast('that would take the day below zero');
+  if (dayTotal(day) + delta > CAP_DAY) return toast('that would pass the 16h day cap');
 
   const note = $('adjNote').value.trim() || (adjSign > 0 ? 'unrecorded work' : 'overcounted');
   await append({ t:'adjust', at:new Date(now).toISOString(), day, ms:delta, note, flags:'' });
   $('adjH').value = ''; $('adjM').value = ''; $('adjNote').value = '';
   render(); pushSoon();
-  toast(`${delta>0?'+':'−'}${hm(Math.abs(delta))} → ${adjOffset?'yesterday':'today'}`);
+  toast(`${delta > 0 ? '+' : '-'}${hm(Math.abs(delta))} on ${adjOffset ? 'yesterday' : 'today'}`);
 }
 
 /* ══════════ GitHub sync — git history is the witness ══════════ */
 const gh = () => cfg.repo && cfg.token;
 const b64 = s => btoa(String.fromCharCode(...new Uint8Array(enc.encode(s))));
+const unb64 = s => new TextDecoder().decode(
+  Uint8Array.from(atob(s.replace(/\s/g,'')), c => c.charCodeAt(0)));
 
 async function ghFetch(path, opt = {}){
   return fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`, {
@@ -231,11 +277,11 @@ async function ghFetch(path, opt = {}){
   });
 }
 
-async function pushLedger(silent){
-  if (!gh()) { if (!silent) toast('set repo + token in settings'); return; }
-  setSync('pushing…');
+async function pushLedger(silent, attempt = 0){
+  if (!gh()) { if (!silent) toast('add your repo and token in settings'); return; }
+  setSync('pushing', 'busy');
   const body = JSON.stringify({
-    head: chain.length ? chain[chain.length-1].h : null,
+    head: head() && chain[chain.length-1].h,
     totalMinutes: Math.round(totalMs()/60e3),
     events: chain,
   }, null, 1);
@@ -248,16 +294,31 @@ async function pushLedger(silent){
     const r = await ghFetch('ledger/ledger.json', {
       method:'PUT',
       body: JSON.stringify({
-        message: `raage: ${Math.round(totalMs()/60e3)}min · head ${head()} · ${chain.length} events`,
+        message: `raage: ${Math.round(totalMs()/60e3)}min · head ${head()||'empty'} · ${chain.length} events`,
         content: b64(body), ...(sha ? { sha } : {}),
       }),
     });
-    if (r.status === 409){ localStorage.removeItem(K.sha); return pushLedger(silent); }
-    if (!r.ok) throw new Error(`${r.status} ${(await r.json()).message || ''}`);
-    save(K.sha, (await r.json()).content.sha);
-    setSync(`witnessed · head ${head()} · ${new Date(Time.now()).toTimeString().slice(0,5)}`);
-  } catch(e){ setSync(`push failed — ${e.message}`); if (!silent) toast('push failed'); }
+    // A stale sha 409s. Refetch once; bounded so a persistently conflicting
+    // remote cannot recurse forever.
+    if (r.status === 409 && attempt < 2){
+      localStorage.removeItem(K.sha);
+      return pushLedger(silent, attempt + 1);
+    }
+    if (!r.ok) throw new Error(`${r.status} ${((await r.json().catch(()=>({}))).message) || ''}`);
+    const j = await r.json().catch(() => null);
+    if (j?.content?.sha) save(K.sha, j.content.sha);
+    setSync(`witnessed at ${clock(Time.now()).slice(0,5)} · head ${head()}`, 'ok');
+  } catch(e){
+    setSync(`push failed: ${e.message}`, 'bad');
+    if (!silent) toast('push failed');
+  }
 }
+
+/* Local chain must be a prefix of the remote one for the remote to be a safe
+   replacement. Longest-wins would silently delete local events that were
+   never pushed. */
+const extendsLocal = remote =>
+  remote.length >= chain.length && chain.every((e, i) => remote[i] && remote[i].h === e.h);
 
 async function pullLedger(){
   if (!gh()) return false;
@@ -265,34 +326,40 @@ async function pullLedger(){
     const r = await ghFetch('ledger/ledger.json');
     if (!r.ok) return false;
     const j = await r.json();
-    const data = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,'')))));
+    const data = JSON.parse(unb64(j.content));
     save(K.sha, j.sha);
-    if ((data.events||[]).length > chain.length){
-      chain = data.events; save(K.chain, chain);
-      toast(`pulled ${chain.length} events from GitHub`);
-      return true;
+    const evs = data.events || [];
+    if (evs.length === chain.length) return false;
+    if (!extendsLocal(evs)){
+      setSync('remote diverged from this device, kept local', 'bad');
+      return false;
     }
-  } catch {}
-  return false;
+    // Never trust a remote ledger without re-hashing it.
+    const v = await verifyChain(evs);
+    if (!v.ok){ setSync(`remote ledger is broken at #${v.at}, kept local`, 'bad'); return false; }
+    chain = evs; save(K.chain, chain); invalidate();
+    toast(`pulled ${chain.length} events from GitHub`);
+    return true;
+  } catch { return false; }
 }
 
 let pushTimer;
 const pushSoon = () => { clearTimeout(pushTimer); pushTimer = setTimeout(() => pushLedger(true), 3000); };
+
+/* ══════════ icons (authored, single 1.5 stroke) ══════════ */
+const icon = (name, cls = '') =>
+  `<svg class="i ${cls}" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
 /* ══════════ render ══════════ */
 const $ = id => document.getElementById(id);
 
 function renderSkew(){
   const el = $('skew');
-  if (!Time.synced){
-    el.textContent = 'OFFLINE — clock unverified. Sessions will be flagged.';
-    el.classList.remove('hidden'); return;
-  }
-  if (Math.abs(Time.skew) > SKEW_LIMIT){
-    el.textContent = `DEVICE CLOCK OFF BY ${hm(Math.abs(Time.skew))} — using GitHub time instead.`;
-    el.classList.remove('hidden'); return;
-  }
-  el.classList.add('hidden');
+  const show = txt => { el.innerHTML = icon('alert') + `<span>${txt}</span>`; el.hidden = false; };
+  if (!Time.synced) return show('Offline. The clock is unverified, so sessions get flagged.');
+  if (Math.abs(Time.skew) > SKEW_LIMIT)
+    return show(`This device's clock is ${hm(Math.abs(Time.skew))} off. Using GitHub's time.`);
+  el.hidden = true;
 }
 
 function renderHero(){
@@ -303,22 +370,27 @@ function renderHero(){
         m = Math.floor(left%3600e3/60e3), s = Math.floor(left%60e3/1000);
   $('hmsLeft').textContent = left
     ? `${d}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
-    : 'TIME IS UP';
-  const START = Date.UTC(2026, 6, 13, 18, 30, 0);   // one year before target
+    : 'time is up';
   const pct = Math.min(100, Math.max(0, (now - START) / (TARGET - START) * 100));
-  $('yearBar').style.width = pct + '%';
+  setBar('yearBar', pct);
   $('yearPct').textContent = pct.toFixed(2) + '%';
-  $('footClock').textContent = Time.synced
-    ? `github clock ${new Date(now).toTimeString().slice(0,8)}` : 'clock unverified';
+  $('footClock').textContent = Time.synced ? `GitHub clock ${clock(now)}` : 'clock unverified';
 }
 
+/* Bars scale on the GPU instead of animating width (layout). */
+const setBar = (id, pct) =>
+  $(id).style.transform = `scaleX(${Math.min(100, Math.max(0, pct)) / 100})`;
+
 function renderLive(){
-  if (!session){ $('liveWrap').classList.add('hidden'); return; }
-  const w = $('liveWrap'); w.classList.remove('hidden');
-  const live = session.acc + Math.min(performance.now() - session.lastMono, ACCRUE_CLAMP);
+  const w = $('liveWrap');
+  if (!session){ w.dataset.on = 'false'; return; }
+  w.dataset.on = 'true';
+  const live = liveMs();
   $('liveTime').textContent = hhmmss(live);
-  $('liveMeta').innerHTML = `${Math.floor(live/60e3)} min credited` +
-    (session.tampered ? '<br>⚠ clock changed' : session.offline ? '<br>⚠ offline' : '');
+  $('liveNote').textContent = session.tampered ? 'clock changed, session flagged'
+    : session.offline ? 'offline, session flagged'
+    : `${Math.floor(live/60e3)} min credited`;
+  $('liveNote').dataset.warn = String(!!(session.tampered || session.offline));
 }
 
 function renderTotals(){
@@ -326,63 +398,74 @@ function renderTotals(){
   $('workedTotal').textContent = hm(t);
   $('claimedPct').textContent = (t / left * 100).toFixed(2) + '%';
 
-  const today = dayTotal(dayKey(now)) + (session ? session.acc : 0);
+  // A session that began before midnight belongs to the day it started, which
+  // is how stopSession() banks it. Adding it to "today" would double-count.
+  const todayK = dayKey(now);
+  const liveToday = session && dayKey(session.startAt) === todayK ? liveMs() : 0;
+  const today = dayTotal(todayK) + liveToday;
   const goal  = cfg.goalH * 3600e3;
   $('todayTotal').textContent = hm(today);
-  $('todayBar').style.width = Math.min(100, today/goal*100) + '%';
-  $('todayVsGoal').textContent = `${hm(today)} / goal ${cfg.goalH}h` +
-    (today >= goal ? '  ✓ hit' : `  · ${hm(goal-today)} to go`);
+  setBar('todayBar', today / goal * 100);
+  $('todayVsGoal').textContent = today >= goal
+    ? `goal of ${cfg.goalH}h met`
+    : `${hm(goal - today)} left of a ${cfg.goalH}h goal`;
 
   const daysLeft = Math.max(1, Math.ceil(left/864e5));
   const remain = cfg.targetH*3600e3 - t;
-  $('paceNeeded').textContent = remain <= 0 ? 'DONE ✓' : `${hm(remain/daysLeft)}/day`;
+  $('paceNeeded').textContent = remain <= 0 ? 'done' : `${hm(remain/daysLeft)}`;
+  $('paceNote').textContent = remain <= 0
+    ? `${cfg.targetH}h goal reached`
+    : `per day, for ${daysLeft} days, to reach ${cfg.targetH}h`;
 }
 
 function renderGrid(){
-  const g = $('grid'); g.innerHTML = '';
+  const g = $('grid');
   const map = byDay();
   const todayK = dayKey(Time.now());
-  const cur = new Date(2026, 7, 6);           // project start
+  const cur = new Date(...GRID_FROM);
   const end = new Date(2027, 6, 13);
-  let filled = 0, days = 0;
+  let claimed = 0, elapsed = 0;
   const frag = document.createDocumentFragment();
   while (cur <= end){
     const k = dayKey(cur.getTime());
-    const ms = map.get(k) || 0;
+    const ms = map.get(k) || 0, h = ms/3600e3;
     const c = document.createElement('div');
     c.className = 'cell';
-    const h = ms/3600e3;
-    if (h > 0) c.classList.add(h>=8?'l4':h>=5?'l3':h>=2?'l2':'l1');
-    else if (k < todayK) c.classList.add('past');
-    if (k === todayK) c.classList.add('today');
-    c.title = `${k} · ${hm(ms)}`;
+    if (h > 0) c.dataset.lvl = h >= 8 ? '4' : h >= 5 ? '3' : h >= 2 ? '2' : '1';
+    else if (k < todayK) c.dataset.lvl = 'lost';
+    if (k === todayK) c.dataset.today = 'true';
+    c.title = `${k}: ${hm(ms)}`;
     frag.appendChild(c);
-    if (k <= todayK){ days++; if (ms > 0) filled++; }
+    if (k <= todayK){ elapsed++; if (ms > 0) claimed++; }
     cur.setDate(cur.getDate()+1);
   }
-  g.appendChild(frag);
-  $('gridStat').textContent = `${filled}/${days} days claimed`;
+  g.replaceChildren(frag);
+  $('gridStat').textContent = `${claimed} of ${elapsed} days claimed`;
 }
 
 async function renderLedger(){
   const el = $('ledger');
-  if (!chain.length){ el.innerHTML = '<div class="empty">no events yet — start working</div>'; }
-  else {
+  if (!chain.length){
+    el.innerHTML = `<p class="empty">Nothing recorded yet. Every session you bank lands
+      here, and stays here.</p>`;
+  } else {
     el.innerHTML = chain.slice().reverse().slice(0, 60).map(e => {
-      const cls = e.t === 'adjust' ? (e.ms>0?'plus':'minus') : 'work';
-      const sign = e.t === 'adjust' ? (e.ms>0?'+':'−') : '';
+      const adj = e.t === 'adjust';
+      const tone = adj ? (e.ms > 0 ? 'plus' : 'minus') : 'work';
+      const sign = adj ? (e.ms > 0 ? '+' : '-') : '';
       return `<div class="le" data-i="${e.i}">
-        <span class="t">${e.day.slice(5)}</span>
-        <span class="m ${cls}">${sign}${hm(Math.abs(e.ms))}</span>
-        <span class="d">${e.t === 'adjust' ? '± ' : ''}${escapeHtml(e.note||'')}${e.flags?` [${e.flags}]`:''}</span>
+        <span class="le-day">${e.day.slice(5)}</span>
+        <span class="le-ms" data-tone="${tone}">${sign}${hm(Math.abs(e.ms))}</span>
+        <span class="le-note">${escapeHtml(e.note || '')}</span>
+        ${e.flags ? `<span class="le-flag" title="${e.flags}">${icon('alert')}</span>` : ''}
       </div>`;
     }).join('');
   }
-  const v = await verifyChain();
+  const v = await verifyCached();
   $('chainState').innerHTML = v.ok
-    ? `<span style="color:var(--green)">✓ intact</span> · ${chain.length} · ${head()}`
-    : `<span style="color:var(--red)">✗ broken at #${v.at}</span>`;
-  if (!v.ok) el.querySelector(`[data-i="${v.at}"]`)?.classList.add('broken');
+    ? `${icon('shield','ok')}<span>${chain.length} events, chain intact${head() ? ` · ${head()}` : ''}</span>`
+    : `${icon('alert','bad')}<span>chain broken at event ${v.at}</span>`;
+  if (!v.ok) el.querySelector(`[data-i="${v.at}"]`)?.setAttribute('data-broken','true');
 }
 
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -390,59 +473,73 @@ const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt
 function render(){
   renderHero(); renderLive(); renderTotals(); renderGrid(); renderLedger();
   const b = $('toggle');
-  b.textContent = session ? 'STOP & BANK' : 'START WORKING';
-  b.classList.toggle('stop', !!session);
+  $('toggleLabel').textContent = session ? 'Stop and bank' : 'Start working';
+  b.dataset.on = String(!!session);
+  b.setAttribute('aria-pressed', String(!!session));
   $('toggleHint').textContent = session
-    ? 'credits only while this app is alive · closes itself if killed'
-    : 'github clock · monotonic accrual · 5h/session · 16h/day';
+    ? 'Credits only while this app is open. If it dies, it banks what it saw.'
+    : 'GitHub clock, monotonic accrual, 5h per session, 16h per day.';
 }
 
 let toastTimer;
 function toast(msg){
-  const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  const t = $('toast');
+  t.textContent = msg;
+  t.dataset.on = 'true';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.dataset.on = 'false', 2800);
 }
-const setSync = s => $('syncState').textContent = s;
+const setSync = (s, tone = '') => {
+  const el = $('syncState');
+  el.textContent = s;
+  el.dataset.tone = tone;
+};
 
 /* ══════════ wiring ══════════ */
 $('toggle').onclick = () => session ? stopSession(false) : startSession();
 
 $('adjSign').onclick = e => {
+  const b = e.currentTarget;
   adjSign *= -1;
-  e.target.textContent = adjSign > 0 ? '+' : '−';
-  e.target.classList.toggle('minus', adjSign < 0);
+  b.dataset.sign = adjSign > 0 ? 'plus' : 'minus';
+  b.setAttribute('aria-label', adjSign > 0 ? 'Adding time' : 'Subtracting time');
 };
 $('adjDay').onclick = e => {
-  if (e.target.tagName !== 'BUTTON') return;
-  adjOffset = +e.target.dataset.off;
-  [...$('adjDay').children].forEach(b => b.classList.toggle('on', b === e.target));
+  const b = e.target.closest('button');
+  if (!b) return;
+  adjOffset = +b.dataset.off;
+  for (const x of $('adjDay').children){
+    const on = x === b;
+    x.dataset.on = String(on);
+    x.setAttribute('aria-pressed', String(on));
+  }
 };
 $('adjApply').onclick = applyAdjust;
 
 $('verify').onclick = async () => {
-  const v = await verifyChain();
+  invalidate();
+  const v = await verifyCached();
   await renderLedger();
-  if (!v.ok) return toast(`TAMPERED at event #${v.at}`);
-  if (gh()){
-    const r = await ghFetch('ledger/ledger.json');
-    if (r.ok){
-      const j = await r.json();
-      const d = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,'')))));
-      return toast(d.head === chain[chain.length-1]?.h
-        ? '✓ chain intact & matches GitHub' : '⚠ diverged from GitHub — push or pull');
-    }
-  }
-  toast('✓ chain intact (local only)');
+  if (!v.ok) return toast(`tampered at event ${v.at}`);
+  if (!gh()) return toast('chain intact on this device');
+  const r = await ghFetch('ledger/ledger.json');
+  if (!r.ok) return toast('chain intact locally, GitHub unreachable');
+  const d = JSON.parse(unb64((await r.json()).content));
+  const localHead = chain.length ? chain[chain.length-1].h : null;
+  toast((d.head ?? null) === localHead
+    ? 'chain intact and matches GitHub'
+    : 'chain intact but GitHub differs, push or reopen');
 };
 $('push').onclick = () => pushLedger(false);
 
 $('export').onclick = () => {
-  const blob = new Blob([JSON.stringify({ head:chain.at(-1)?.h, events:chain }, null, 2)],
+  const blob = new Blob([JSON.stringify({ head:chain.at(-1)?.h ?? null, events:chain }, null, 2)],
                         { type:'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `raage-ledger-${dayKey(Time.now())}.json`;
   a.click();
+  URL.revokeObjectURL(a.href);
 };
 
 for (const [id, key, num] of [['setGoal','goalH',1],['setTarget','targetH',1],
@@ -451,12 +548,18 @@ for (const [id, key, num] of [['setGoal','goalH',1],['setTarget','targetH',1],
   el.value = cfg[key];
   el.onchange = () => {
     cfg[key] = num ? (+el.value || cfg[key]) : el.value.trim();
-    save(K.cfg, cfg); localStorage.removeItem(K.sha); render();
+    save(K.cfg, cfg);
+    if (!num) localStorage.removeItem(K.sha);   // different repo, different file
+    render();
   };
 }
 
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden){ Time.sync().then(() => { reviveSession(); render(); }); }
+document.addEventListener('visibilitychange', async () => {
+  document.body.dataset.hidden = String(document.hidden);   // parks the ambient motion
+  if (document.hidden) return;
+  await Time.sync();
+  await reviveSession();
+  render();
 });
 window.addEventListener('beforeunload', () => { if (session) accrue(); });
 
@@ -467,6 +570,7 @@ window.addEventListener('beforeunload', () => { if (session) accrue(); });
   if (await pullLedger()) render();
   await reviveSession();
   render();
+  document.body.dataset.ready = 'true';        // triggers the one entrance
   setInterval(renderHero, 1000);
   setInterval(renderLive, 1000);
   setInterval(() => { if (session){ accrue(); renderTotals(); } }, ACCRUE_EVERY);

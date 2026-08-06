@@ -4,146 +4,212 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Raage_SriVarshan</title>
-<meta name="theme-color" content="#0a0a0b">
+<meta name="description" content="An unpausable countdown to 13 July 2027 and an append-only ledger of every minute actually worked.">
+<meta name="theme-color" content="#08080a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div id="skew" class="banner hidden"></div>
+<!-- Authored icon set. One family, 1.5 stroke, 16px grid. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-alert" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+    <path d="M8 2.6 1.8 13.4h12.4L8 2.6Z" stroke-linejoin="round"/><path d="M8 6.6v3.1"/><path d="M8 11.7h.01"/>
+  </symbol>
+  <symbol id="i-shield" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 1.8 2.9 3.9v4c0 3 2.1 5.1 5.1 6.3 3-1.2 5.1-3.3 5.1-6.3v-4L8 1.8Z"/><path d="M5.9 7.9 7.4 9.4l3-3"/>
+  </symbol>
+  <symbol id="i-plus" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+    <path d="M8 3.6v8.8M3.6 8h8.8"/>
+  </symbol>
+  <symbol id="i-minus" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+    <path d="M3.6 8h8.8"/>
+  </symbol>
+  <symbol id="i-upload" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 10.6V2.9"/><path d="M5.2 5.7 8 2.9l2.8 2.8"/><path d="M2.6 10.4v1.9c0 .6.5 1.1 1.1 1.1h8.6c.6 0 1.1-.5 1.1-1.1v-1.9"/>
+  </symbol>
+  <symbol id="i-download" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 2.9v7.7"/><path d="M5.2 7.8 8 10.6l2.8-2.8"/><path d="M2.6 10.4v1.9c0 .6.5 1.1 1.1 1.1h8.6c.6 0 1.1-.5 1.1-1.1v-1.9"/>
+  </symbol>
+</defs></svg>
+
+<p id="skew" class="banner" hidden></p>
 
 <main>
 
-  <header>
+  <header class="head">
     <h1>RAAGE<span class="us">_</span>SRIVARSHAN</h1>
-    <p class="deadline">until <b>13 Jul 2027</b> · no pause · no reset</p>
   </header>
 
-  <!-- ══ THE UNSTOPPABLE COUNTDOWN ══ -->
-  <section class="hero">
-    <div class="big" id="minsLeft">—</div>
-    <div class="big-label">minutes left</div>
-    <div class="hms" id="hmsLeft">—</div>
-    <div class="bar"><div class="bar-fill" id="yearBar"></div></div>
-    <div class="bar-cap"><span id="yearPct">0%</span> of the year burned</div>
+  <!-- ══ the countdown: derived from a constant, so it cannot be paused ══ -->
+  <section class="hero" aria-labelledby="heroLabel">
+    <div class="aurora" aria-hidden="true"></div>
+    <p class="hero-lede">Every minute until <b>13 July 2027</b>, counted whether you use them or not.</p>
+    <p class="mins" id="minsLeft">&nbsp;</p>
+    <p class="mins-unit" id="heroLabel">minutes left</p>
+    <p class="hms" id="hmsLeft">&nbsp;</p>
+    <div class="track"><span class="fill" id="yearBar"></span></div>
+    <p class="track-cap"><b id="yearPct">0%</b> of the year is gone</p>
   </section>
 
-  <!-- ══ WORKED TOTAL ══ -->
+  <!-- ══ the ledger total ══ -->
   <section class="card">
-    <div class="row">
+    <div class="pair">
       <div>
-        <div class="k">CLAIMED</div>
-        <div class="v" id="workedTotal">0m</div>
+        <h2 class="lbl">Claimed</h2>
+        <p class="stat" id="workedTotal">0m</p>
       </div>
-      <div class="right">
-        <div class="k">OF TIME LEFT</div>
-        <div class="v dim" id="claimedPct">0.00%</div>
+      <div class="pair-end">
+        <h2 class="lbl">Of the time left</h2>
+        <p class="stat sub" id="claimedPct">0.00%</p>
       </div>
     </div>
 
-    <div id="liveWrap" class="live hidden">
-      <div class="live-dot"></div>
-      <div class="live-time" id="liveTime">00:00:00</div>
-      <div class="live-meta" id="liveMeta">0 beats credited</div>
+    <div class="live" id="liveWrap" data-on="false">
+      <div class="live-in">
+        <span class="beacon" aria-hidden="true"></span>
+        <p class="live-time" id="liveTime">00:00:00</p>
+        <p class="live-note" id="liveNote" data-warn="false"></p>
+      </div>
     </div>
 
-    <button id="toggle" class="primary">START WORKING</button>
-    <div class="hint" id="toggleHint">server clock · 60s heartbeats · max 5h/session</div>
+    <button id="toggle" class="btn-main" data-on="false" aria-pressed="false">
+      <span id="toggleLabel">Start working</span>
+    </button>
+    <p class="hint" id="toggleHint"></p>
   </section>
 
-  <!-- ══ TODAY / PACE ══ -->
+  <!-- ══ today against the pace you need ══ -->
   <section class="card">
-    <div class="row">
+    <div class="pair">
       <div>
-        <div class="k">TODAY</div>
-        <div class="v" id="todayTotal">0m</div>
+        <h2 class="lbl">Today</h2>
+        <p class="stat" id="todayTotal">0m</p>
+        <p class="hint tight" id="todayVsGoal"></p>
       </div>
-      <div class="right">
-        <div class="k">PACE NEEDED</div>
-        <div class="v dim" id="paceNeeded">—</div>
+      <div class="pair-end">
+        <h2 class="lbl">Pace needed</h2>
+        <p class="stat sub" id="paceNeeded">0m</p>
       </div>
     </div>
-    <div class="bar thin"><div class="bar-fill amber" id="todayBar"></div></div>
-    <div class="bar-cap"><span id="todayVsGoal">goal 8h</span></div>
+    <div class="track thin"><span class="fill amber" id="todayBar"></span></div>
+    <p class="track-cap" id="paceNote"></p>
   </section>
 
-  <!-- ══ DAY GRID ══ -->
+  <!-- ══ every remaining day, one cell each ══ -->
   <section class="card">
-    <div class="k spread">THE REMAINING DAYS <span id="gridStat" class="dim"></span></div>
+    <div class="card-head">
+      <h2 class="lbl">The remaining days</h2>
+      <p class="lbl faint" id="gridStat"></p>
+    </div>
     <div id="grid" class="grid"></div>
-    <div class="legend">
-      <span class="sw l0"></span><span class="sw l1"></span><span class="sw l2"></span><span class="sw l3"></span><span class="sw l4"></span>
-      <span class="dim">0 → 8h+</span>
-      <span class="spacer"></span>
-      <span class="dim">empty = gone forever</span>
-    </div>
+    <p class="scale">
+      <span class="key" data-lvl="lost"></span>
+      <span class="key" data-lvl="1"></span>
+      <span class="key" data-lvl="2"></span>
+      <span class="key" data-lvl="3"></span>
+      <span class="key" data-lvl="4"></span>
+      <span class="scale-txt">unworked to 8h+</span>
+    </p>
   </section>
 
-  <!-- ══ ADJUST ══ -->
+  <!-- ══ corrections, appended and never edited ══ -->
   <section class="card">
-    <div class="k">MANUAL ADJUSTMENT</div>
-    <div class="adj">
-      <div class="seg" id="adjDay">
-        <button data-off="0" class="on">Today</button>
-        <button data-off="1">Yesterday</button>
-      </div>
-      <div class="adj-row">
-        <button class="sign" id="adjSign">+</button>
-        <input id="adjH" type="number" inputmode="numeric" min="0" max="16" placeholder="0" aria-label="hours">
-        <span class="unit">h</span>
-        <input id="adjM" type="number" inputmode="numeric" min="0" max="59" placeholder="0" aria-label="minutes">
-        <span class="unit">m</span>
-      </div>
-      <input id="adjNote" type="text" maxlength="60" placeholder="why? (forgot to start…)">
-      <button id="adjApply" class="secondary">APPEND ADJUSTMENT</button>
-      <div class="hint">Today &amp; yesterday only. Max ±2h net per day. Never edits history — appends a signed correction.</div>
+    <div class="card-head">
+      <h2 class="lbl">Correct a day</h2>
     </div>
+
+    <div class="seg" id="adjDay" role="group" aria-label="Which day to correct">
+      <button type="button" data-off="0" data-on="true" aria-pressed="true">Today</button>
+      <button type="button" data-off="1" data-on="false" aria-pressed="false">Yesterday</button>
+    </div>
+
+    <div class="amount">
+      <button type="button" id="adjSign" class="sign" data-sign="plus" aria-label="Adding time">
+        <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-plus"/></svg>
+        <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-minus"/></svg>
+      </button>
+      <span class="field">
+        <label for="adjH">hours</label>
+        <input id="adjH" type="number" inputmode="numeric" min="0" max="16" step="1" placeholder="0">
+      </span>
+      <span class="field">
+        <label for="adjM">minutes</label>
+        <input id="adjM" type="number" inputmode="numeric" min="0" max="59" step="1" placeholder="0">
+      </span>
+    </div>
+
+    <span class="field wide">
+      <label for="adjNote">Reason</label>
+      <input id="adjNote" type="text" maxlength="60" placeholder="forgot to start the timer">
+    </span>
+
+    <button id="adjApply" class="btn-sub">Append correction</button>
+    <p class="hint">Today and yesterday only, up to 2h either way per day. This appends a
+      signed correction. It never edits what is already there.</p>
   </section>
 
-  <!-- ══ LEDGER ══ -->
+  <!-- ══ the ledger itself ══ -->
   <section class="card">
-    <div class="k spread">LEDGER <span id="chainState" class="dim">—</span></div>
+    <div class="card-head">
+      <h2 class="lbl">Ledger</h2>
+      <p class="chain" id="chainState"></p>
+    </div>
     <div id="ledger" class="ledger"></div>
     <div class="btn-row">
-      <button id="verify" class="ghost">VERIFY CHAIN</button>
-      <button id="push" class="ghost">PUSH TO GITHUB</button>
+      <button id="verify" class="btn-ghost">
+        <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-shield"/></svg>
+        Verify chain
+      </button>
+      <button id="push" class="btn-ghost">
+        <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-upload"/></svg>
+        Push to GitHub
+      </button>
     </div>
-    <div class="hint" id="syncState">not synced</div>
+    <p class="hint" id="syncState">not synced yet</p>
   </section>
 
-  <!-- ══ SETTINGS ══ -->
+  <!-- ══ settings ══ -->
   <details class="card">
-    <summary class="k">SETTINGS</summary>
+    <summary><h2 class="lbl">Settings</h2><span class="chev" aria-hidden="true"></span></summary>
     <div class="set">
-      <label>Daily goal (hours)
+      <span class="field wide">
+        <label for="setGoal">Daily goal, in hours</label>
         <input id="setGoal" type="number" min="1" max="16" step="0.5">
-      </label>
-      <label>Total goal by 13 Jul 2027 (hours)
+      </span>
+      <span class="field wide">
+        <label for="setTarget">Total hours to reach by 13 July 2027</label>
         <input id="setTarget" type="number" min="0" step="10">
-      </label>
+      </span>
       <hr>
-      <label>GitHub repo (owner/name)
-        <input id="setRepo" type="text" placeholder="varsansri/Raage_SriVarshan" spellcheck="false">
-      </label>
-      <label>Fine-grained PAT · Contents: read&amp;write
-        <input id="setToken" type="password" placeholder="github_pat_…" spellcheck="false">
-      </label>
-      <div class="hint">Stored only in this device's localStorage — never committed. Every push is a git commit, so the timeline is witnessed by GitHub, not by you.</div>
+      <span class="field wide">
+        <label for="setRepo">GitHub repo, as owner/name</label>
+        <input id="setRepo" type="text" placeholder="varsansri/Raage_SriVarshan" spellcheck="false" autocapitalize="off">
+      </span>
+      <span class="field wide">
+        <label for="setToken">Fine-grained token, Contents read and write</label>
+        <input id="setToken" type="password" placeholder="github_pat_..." spellcheck="false" autocomplete="off">
+      </span>
+      <p class="hint">The token stays in this device's local storage and is never committed.
+        Every push is a git commit, so the timeline is witnessed by GitHub instead of by you.</p>
       <hr>
-      <button id="export" class="ghost">EXPORT LEDGER JSON</button>
+      <button id="export" class="btn-ghost wide">
+        <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-download"/></svg>
+        Export the ledger
+      </button>
     </div>
   </details>
 
   <footer>
-    <span id="footClock">—</span> · built to be un-fakeable
+    <p id="footClock">clock unverified</p>
   </footer>
 
 </main>
 
-<div id="toast" class="toast"></div>
+<p id="toast" class="toast" data-on="false" role="status" aria-live="polite"></p>
 
 <script src="app.js"></script>
 </body>

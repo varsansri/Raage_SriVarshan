@@ -22,9 +22,12 @@ const mkEl = () => {
       remove(...c){c.forEach(x=>this._s.delete(x))},
       toggle(c,f){f===undefined?(this._s.has(c)?this._s.delete(c):this._s.add(c)):(f?this._s.add(c):this._s.delete(c))},
       contains(c){return this._s.has(c)} },
+    hidden:false, id:'',
     appendChild(c){ this.children.push(c); return c },
+    replaceChildren(){ this.children = [] },
     querySelector(){ return null }, querySelectorAll(){ return [] },
-    addEventListener(){}, click(){},
+    setAttribute(k,v){ this[k] = v }, getAttribute(k){ return this[k] },
+    closest(){ return this }, addEventListener(){}, click(){},
   };
   return e;
 };
@@ -32,7 +35,7 @@ const els = new Map();
 globalThis.document = {
   getElementById: id => { if (!els.has(id)) els.set(id, mkEl()); return els.get(id) },
   createElement: mkEl, createDocumentFragment: mkEl,
-  addEventListener(){}, hidden:false,
+  addEventListener(){}, hidden:false, body: mkEl(),
 };
 globalThis.window = { addEventListener(){} };
 // node's navigator is getter-only; app.js only probes it for serviceWorker
@@ -56,7 +59,9 @@ const advance = (ms, opts = {}) => { mono += ms; wall += (opts.wallOnly ?? ms); 
 let src = readFileSync(APP, 'utf8');
 src += `;globalThis.__T={startSession,stopSession,accrue,applyAdjust,verifyChain,
   getChain:()=>chain, setChain:c=>{chain=c}, totalMs, dayKey, dayTotal, Time, append,
-  setAdj:(o,s)=>{adjOffset=o;adjSign=s}, getSession:()=>session, CAP_DAY};`;
+  setAdj:(o,s)=>{adjOffset=o;adjSign=s}, getSession:()=>session, CAP_DAY,
+  hm, liveMs, invalidate, extendsLocal, readAmount, verifyCached,
+  setCfg:o=>Object.assign(cfg,o), renderTotals};`;
 new Function(src)();
 const T = globalThis.__T;
 const $ = id => document.getElementById(id);
@@ -170,6 +175,70 @@ await T.append({ t:'work', at:new Date(wall).toISOString(), day:T.dayKey(T.Time.
 const n3 = T.getChain().length;
 T.startSession();
 ok(T.getSession() === null || T.getChain().length === n3, 'cannot start past the 16h/day cap');
+
+console.log('\n── hm() carries minutes into hours (was "5h 60m") ──');
+ok(T.hm(3600e3 - 1) === '1h 00m', `59.99min reads "${T.hm(3600e3-1)}" not "60m"`);
+ok(T.hm(2*3600e3 + 3599999) === '3h 00m', `2h59.99m reads "${T.hm(2*3600e3+3599999)}"`);
+ok(T.hm(0) === '0m', '0 reads "0m"');
+ok(T.hm(-5400e3) === '-1h 30m', `negative reads "${T.hm(-5400e3)}"`);
+ok(T.hm(90*60e3) === '1h 30m', '90min reads "1h 30m"');
+
+console.log('\n── a remote ledger cannot delete unpushed local events ──');
+T.setChain([]);
+await T.append({ t:'work', at:new Date(wall).toISOString(), day:'2026-08-06', ms:60e3, note:'a', flags:'' });
+await T.append({ t:'work', at:new Date(wall).toISOString(), day:'2026-08-06', ms:60e3, note:'b', flags:'' });
+const local2 = JSON.stringify(T.getChain());
+const remoteExtends = JSON.parse(local2);
+remoteExtends.push({ i:2, t:'work', at:'x', day:'2026-08-07', ms:60e3, note:'c', flags:'', h:'zz' });
+ok(T.extendsLocal(remoteExtends), 'a remote that extends local is accepted');
+const remoteDiverged = JSON.parse(local2);
+remoteDiverged[1] = { ...remoteDiverged[1], h:'different' };
+ok(!T.extendsLocal(remoteDiverged), 'a remote that rewrote event 1 is REFUSED');
+const remoteShorter = [JSON.parse(local2)[0]];
+ok(!T.extendsLocal(remoteShorter), 'a shorter remote is REFUSED (would delete local work)');
+
+console.log('\n── one session cannot be banked twice ──');
+T.setChain([]); store.delete('grind.session');
+T.startSession();
+for (let i = 0; i < 30; i++) { advance(10e3); T.accrue(); }
+const p1 = T.stopSession(false), p2 = T.stopSession(false);   // double tap
+await Promise.all([p1, p2]);
+ok(T.getChain().length === 1, `banked once, not twice (${T.getChain().length} events)`);
+
+console.log('\n── an overnight session is not counted against today ──');
+T.setChain([]); store.delete('grind.session');
+T.startSession();
+for (let i = 0; i < 6; i++) { advance(10e3); T.accrue(); }
+const startDay = T.dayKey(T.getSession().startAt);
+wall += 864e5; await T.Time.sync();       // fake: server rolls to the next day
+SERVER_MS += 864e5; await T.Time.sync();
+const nextDay = T.dayKey(T.Time.now());
+ok(startDay !== nextDay, 'the clock is now on the following day');
+T.renderTotals();
+ok($('todayTotal').textContent === '0m',
+   `today shows 0m, not the running session from yesterday (got ${$('todayTotal').textContent})`);
+await T.stopSession(false);
+ok(T.getChain()[0].day === startDay, 'the session banked to the day it started');
+SERVER_MS -= 864e5; await T.Time.sync();
+
+console.log('\n── adjustment inputs are read defensively ──');
+$('adjH').value = '-5'; $('adjM').value = '2.7';
+ok(T.readAmount() === 5*3600e3 + 2*60e3,
+   `negative and fractional input floored to magnitude (${T.readAmount()/60e3}min)`);
+$('adjH').value = '1e9'; $('adjM').value = '';
+ok(T.readAmount() <= 999*3600e3, 'absurd input is capped');
+$('adjH').value = ''; $('adjM').value = '';
+ok(T.readAmount() === 0, 'blank input is zero');
+
+console.log('\n── day cap refuses rather than silently eating a session ──');
+T.setChain([]); store.delete('grind.session');
+await T.append({ t:'work', at:new Date(wall).toISOString(), day:T.dayKey(T.Time.now()),
+                 ms:15.5*3600e3, note:'nearly full', flags:'' });
+T.startSession();
+for (let i = 0; i < 30; i++) { advance(10e3); T.accrue(); }   // 5 min
+await T.stopSession(false);
+const dayMs = T.dayTotal(T.dayKey(T.Time.now()));
+ok(dayMs <= T.CAP_DAY, `day total ${(dayMs/3600e3).toFixed(2)}h never passes the 16h cap`);
 
 console.log(`\n${'═'.repeat(46)}\n  ${pass} passed, ${fail} failed\n${'═'.repeat(46)}`);
 process.exit(fail ? 1 : 0);
