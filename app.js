@@ -697,6 +697,147 @@ async function loadJournal(){
     : 'nothing recorded yet';
 }
 
+/* ══════════ the goal ═════════════════════════════════════════════════
+   One crore rupees by 17 July 2027, said out loud on 2026-08-06. It sits
+   above the work because every sector below it exists to reach it. The
+   countdown at the top of the page runs to 13 July 2027, four days earlier;
+   both dates are shown rather than quietly reconciled.                 */
+const MONEY_TARGET = Date.UTC(2027, 6, 16, 18, 30, 0);   // 17 Jul 2027, 00:00 IST
+
+function renderGoal(){
+  const left = Math.ceil((MONEY_TARGET - Time.now()) / 864e5);
+  $('goalDays').textContent = nf.format(Math.max(0, left));
+  $('goalNote').textContent =
+    'One crore rupees by 17 July 2027, from the job, the software business and ' +
+    'trading. The countdown above ends 13 July, four days earlier.';
+}
+
+/* ══════════ the reminder list ════════════════════════════════════════
+   Written by the agent through `raage task add`, read here. Ticking one off
+   appends a done event to journal/tasks.log through the same token the
+   ledger uses; the list never edits or deletes what was added.         */
+let tasks = null;
+
+async function loadTasks(){
+  try {
+    const r = await fetch(`./journal/tasks.json?t=${Date.now()}`, { cache:'no-store' });
+    tasks = r.ok ? await r.json() : null;
+  } catch { tasks = null; }
+  renderTasks();
+}
+
+const TASK_GROUPS = [
+  ['overdue',  'Overdue'],
+  ['today',    'Today'],
+  ['tomorrow', 'Tomorrow'],
+  ['later',    'Later'],
+];
+
+function renderTasks(){
+  const open = tasks?.open || [];
+  const today = istDay(Time.now());
+  const tmr = new Date(Date.parse(`${today}T12:00:00Z`) + 864e5).toISOString().slice(0,10);
+  const bucket = t => !t.due ? 'later'
+    : t.due < today ? 'overdue' : t.due === today ? 'today' : t.due === tmr ? 'tomorrow' : 'later';
+
+  const doneToday = (tasks?.closed || []).filter(t => t.state === 'done'
+    && (t.closedAt || '').slice(0,10) === new Date(Time.now()).toISOString().slice(0,10)).length;
+
+  $('taskStat').textContent = open.length
+    ? `${open.length} open${doneToday ? ` · ${doneToday} done today` : ''}`
+    : doneToday ? `all clear · ${doneToday} done today` : 'nothing open';
+
+  if (!open.length){
+    $('taskList').innerHTML = `<p class="empty">Nothing waiting. Tell your agent what is next
+      and it lands here.</p>`;
+  } else {
+    $('taskList').innerHTML = TASK_GROUPS.map(([key, label]) => {
+      const list = open.filter(t => bucket(t) === key);
+      if (!list.length) return '';
+      return `<p class="task-h" data-k="${key}">${label}</p>` + list.map(t => `
+        <div class="task" data-id="${t.id}">
+          <button type="button" class="tick" data-id="${t.id}"
+            aria-label="Mark done: ${escapeHtml(t.text)}"></button>
+          <span class="task-t">${escapeHtml(t.text)}</span>
+          <span class="task-m">${t.sector ? `<i class="sector">${escapeHtml(t.sector)}</i>` : ''}${
+            t.by ? `<i class="by">${t.by}</i>` : ''}</span>
+        </div>`).join('');
+    }).join('');
+  }
+
+  $('taskNote').textContent = tasks
+    ? 'Ticking one off appends a done event. Nothing is ever deleted, so what you finished stays visible.'
+    : 'No task list yet. Your agent creates it with raage task add.';
+}
+
+/* Append-only: a done event is added to the log, and tasks.json is patched so
+   the list moves at once. `raage rebuild` replays the log and is the authority. */
+async function completeTask(id){
+  if (!gh()) return toast('add your repo and token in settings');
+  const row = document.querySelector(`.task[data-id="${id}"]`);
+  row?.setAttribute('data-going', 'true');
+  try {
+    const at = new Date(Time.now()).toISOString();
+    const r = await ghFetch('journal/tasks.log');
+    if (!r.ok) throw new Error('no task log');
+    const prev = unb64((await r.json()).content);
+    await ghPut('journal/tasks.log',
+      prev + JSON.stringify({ at, agent:'site', act:'done', id }) + '\n',
+      `tasks: done ${id}`);
+
+    const t = (tasks.open || []).find(x => x.id === id);
+    tasks.open = (tasks.open || []).filter(x => x.id !== id);
+    if (t) tasks.closed = [{ ...t, state:'done', closedAt: at }, ...(tasks.closed || [])];
+    await ghPut('journal/tasks.json', JSON.stringify(tasks, null, 1) + '\n',
+                `tasks: tasks.json after ${id}`);
+    renderTasks();
+    toast('done');
+  } catch(e){
+    row?.removeAttribute('data-going');
+    toast(`could not save: ${e.message}`);
+  }
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('.tick');
+  if (b) completeTask(b.dataset.id);
+});
+
+/* ══════════ sectors ══════════════════════════════════════════════════
+   Four fixed sectors, so months can be compared. The number that matters is
+   not the count, it is how long ago each one was last touched. */
+const SECTORS = [
+  ['job',      'Job'],
+  ['software', 'Software'],
+  ['trading',  'Trading'],
+  ['life',     'Life'],
+];
+
+function renderSectors(){
+  const all = journal?.days || [];
+  const today = istDay(Time.now());
+  const daysAgo = d => Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${d}T12:00:00Z`)) / 864e5);
+  const month = today.slice(0, 7);
+
+  const rows = SECTORS.map(([key, label]) => {
+    const touched = all.filter(d => (d.sectors || []).includes(key));
+    const last = touched.length ? touched[touched.length - 1].day : null;
+    const n = touched.filter(d => d.day.slice(0,7) === month).length;
+    const ago = last ? daysAgo(last) : null;
+    return { key, label, n, ago,
+      when: ago == null ? 'not yet' : ago === 0 ? 'today' : ago === 1 ? 'yesterday' : `${ago} days ago` };
+  });
+  const max = Math.max(1, ...rows.map(r => r.n));
+
+  $('sectorRows').innerHTML = rows.map(r => `
+    <div class="sector-row"${r.ago != null && r.ago >= 3 ? ' data-cold="true"' : ''}>
+      <span class="sector-l">${r.label}</span>
+      <span class="bar-t"><i style="width:${(r.n / max) * 100}%"></i></span>
+      <span class="sector-n">${r.n}</span>
+      <span class="sector-w">${r.when}</span>
+    </div>`).join('');
+}
+
 /* ══════════ the month ════════════════════════════════════════════════
    Two single-series charts rather than one dual-axis chart: hours and
    clock-times have unrelated scales, and putting them on one plot would
@@ -759,6 +900,7 @@ function renderMonth(){
   drawTags(logged);
   drawTable(rows);
   renderEnergy(rows);
+  renderSectors();
 }
 
 /* ── what the days were made of ────────────────────────────────────────
@@ -1109,10 +1251,13 @@ matchMedia('(display-mode: standalone)').addEventListener('change', e => {
   if (await pullLedger()) render();
   await reviveSession();
   render();
+  renderGoal();
   await loadJournal();
   renderMonth();
+  await loadTasks();
   document.body.dataset.ready = 'true';        // triggers the one entrance
   setInterval(renderHero, 1000);
+  setInterval(renderGoal, 60e3);              // days left, not seconds left
   setInterval(renderLive, 1000);
   setInterval(() => { if (session){ accrue(); renderTotals(); } }, ACCRUE_EVERY);
   setInterval(() => Time.sync(), 10 * 60e3);

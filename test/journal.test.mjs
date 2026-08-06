@@ -20,7 +20,7 @@ copyFileSync(join(REPO, 'bin/raage.mjs'), join(box, 'bin/raage.mjs'));
 
 const raage = (...args) => execFileSync('node', ['bin/raage.mjs', ...args],
   { cwd: box, encoding: 'utf8',
-    env: { ...process.env, TZ: 'Asia/Kolkata', RAAGE_NO_PHONE: '1' } });
+    env: { ...process.env, TZ: 'Asia/Kolkata', RAAGE_NO_PHONE: '1', RAAGE_NO_PUSH: '1' } });
 /* Returns the metadata of the entry a log call just wrote, by reading the id
    out of its output. Filename sorting is not a safe way to find it. */
 const logged = (...args) => {
@@ -151,6 +151,43 @@ ok(readFileSync(join(box, 'journal/READINGS.log'), 'utf8').includes(morning.id),
 let bad = false;
 try { raage('reading', 'nope-not-an-entry', '--energy', '5'); } catch { bad = true; }
 ok(bad, 'a reading on an entry that does not exist is refused');
+
+console.log('\n── sectors are a fixed vocabulary ──');
+rmSync(join(box, 'journal'), { recursive: true, force: true });
+const sect = logged('worked on the site and the trading scripts', '--sector', 'software,trading');
+ok(JSON.stringify(sect.reported.sectors) === '["software","trading"]', 'sectors parsed');
+let rejected = false;
+try { raage('log', 'nope', '--sector', 'crypto'); } catch { rejected = true; }
+ok(rejected, 'a sector outside the fixed list is refused, not invented');
+ok(days().days[0].sectors.join() === 'software,trading', 'the day carries its sectors');
+
+console.log('\n── tasks: an append-only reminder list ──');
+rmSync(join(box, 'journal'), { recursive: true, force: true });
+const tasksJson = () => JSON.parse(readFileSync(join(box, 'journal/tasks.json'), 'utf8'));
+raage('task', 'add', 'write the scripts', '--sector', 'trading', '--when', 'today', '--by', '22:00');
+raage('task', 'add', 'hanubees SEO', '--sector', 'software', '--when', 'tomorrow');
+ok(tasksJson().open.length === 2, 'two tasks open');
+ok(tasksJson().open[0].id === 't1' && tasksJson().open[0].by === '22:00', 'first task keeps its time');
+ok(tasksJson().open[1].due > tasksJson().open[0].due, 'tomorrow sorts after today');
+let badWhen = false;
+try { raage('task', 'add', 'x', '--when', 'next tuesday'); } catch { badWhen = true; }
+ok(badWhen, 'an unparseable --when is refused rather than guessed');
+
+const logLines = () => readFileSync(join(box, 'journal/tasks.log'), 'utf8').split('\n').filter(Boolean);
+const beforeDone = logLines().length;
+raage('task', 'done', 't1');
+ok(logLines().length === beforeDone + 1, 'done appends an event');
+ok(logLines()[0].includes('write the scripts'), 'the original add line is still there, untouched');
+ok(tasksJson().open.length === 1 && tasksJson().closed[0].id === 't1', 't1 moved to closed');
+ok(tasksJson().closed[0].text === 'write the scripts', 'a finished task keeps its words');
+let noSuch = false;
+try { raage('task', 'done', 't99'); } catch { noSuch = true; }
+ok(noSuch, 'finishing a task that never existed is refused');
+
+const openBefore = JSON.stringify(tasksJson().open);
+rmSync(join(box, 'journal/tasks.json'));
+raage('rebuild');
+ok(JSON.stringify(tasksJson().open) === openBefore, 'tasks.json replays from the log identically');
 
 console.log('\n── the ledger is never touched ──');
 ok(!existsSync(join(box, 'ledger')), 'no writes anywhere near ledger/');

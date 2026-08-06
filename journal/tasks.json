@@ -1,0 +1,80 @@
+{
+ "generated": "2026-08-06T14:43:23.580Z",
+ "note": "DERIVED FILE. Replayed from journal/tasks.log by bin/raage.mjs rebuild.",
+ "today": "2026-08-06",
+ "open": [
+  {
+   "id": "t1",
+   "text": "write 4 to 6 scripts for the trading videos",
+   "sector": "trading",
+   "due": "2026-08-06",
+   "by": "22:00",
+   "added": "2026-08-06T14:43:20.338Z",
+   "state": "open"
+  },
+  {
+   "id": "t2",
+   "text": "record the voiceovers for those scripts, about 4 minutes each",
+   "sector": "trading",
+   "due": "2026-08-06",
+   "by": "23:59",
+   "added": "2026-08-06T14:43:20.886Z",
+   "state": "open"
+  },
+  {
+   "id": "t3",
+   "text": "give the AI instructions for hanubees.com SEO",
+   "sector": "software",
+   "due": "2026-08-06",
+   "by": null,
+   "added": "2026-08-06T14:43:21.336Z",
+   "state": "open"
+  },
+  {
+   "id": "t4",
+   "text": "fxabsolute.com SEO, only if there is time left",
+   "sector": "trading",
+   "due": "2026-08-06",
+   "by": null,
+   "added": "2026-08-06T14:43:21.859Z",
+   "state": "open"
+  },
+  {
+   "id": "t5",
+   "text": "check the Google Studio V03 daily credit limit and whether multiple accounts work",
+   "sector": "trading",
+   "due": "2026-08-07",
+   "by": null,
+   "added": "2026-08-06T14:43:22.318Z",
+   "state": "open"
+  },
+  {
+   "id": "t6",
+   "text": "pick 3 to 5 influencers and swipe their top videos word by word, tuned to reactive trading",
+   "sector": "trading",
+   "due": "2026-08-07",
+   "by": null,
+   "added": "2026-08-06T14:43:22.757Z",
+   "state": "open"
+  },
+  {
+   "id": "t7",
+   "text": "make the videos and footages from last night's voiceovers",
+   "sector": "trading",
+   "due": "2026-08-07",
+   "by": null,
+   "added": "2026-08-06T14:43:23.206Z",
+   "state": "open"
+  },
+  {
+   "id": "t8",
+   "text": "give the report for the job",
+   "sector": "job",
+   "due": "2026-08-07",
+   "by": null,
+   "added": "2026-08-06T14:43:23.562Z",
+   "state": "open"
+  }
+ ],
+ "closed": []
+}

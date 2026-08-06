@@ -1,6 +1,6 @@
 /* Cache the shell so the countdown survives offline.
    Network-first for app files so deploys land immediately. */
-const CACHE = 'raage-v5';
+const CACHE = 'raage-v6';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js',
                'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 

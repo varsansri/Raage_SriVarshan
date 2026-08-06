@@ -35,6 +35,13 @@ const ENTRIES  = path.join(JOURNAL, 'entries');
 const DAYS     = path.join(JOURNAL, 'days');
 const DAYS_JSON = path.join(JOURNAL, 'days.json');
 const MANIFEST = path.join(JOURNAL, 'MANIFEST.txt');
+const TASK_LOG  = path.join(JOURNAL, 'tasks.log');    // append-only, the record
+const TASK_JSON = path.join(JOURNAL, 'tasks.json');   // derived, what the site reads
+
+/* The fixed vocabulary. varsansri named three things he works on and everything
+   else is his life; a set that grows every week cannot be compared across
+   months, so a sector outside this list is refused rather than invented. */
+const SECTORS = ['job', 'software', 'trading', 'life'];
 
 /* Phone mirrors. Absent off-device, which is not an error. */
 const PHONE_MIRROR = '/sdcard/Raage_SriVarshan';
@@ -112,6 +119,15 @@ const readStdin = () => {
   try { return fs.readFileSync(0, 'utf8'); } catch { return ''; }
 };
 
+const sectorList = v => {
+  const a = list(v);
+  if (!a) return null;
+  const clean = a.map(s => s.toLowerCase());
+  const bad = clean.filter(s => !SECTORS.includes(s));
+  if (bad.length) die(`unknown sector "${bad[0]}". Use one of: ${SECTORS.join(', ')}`);
+  return [...new Set(clean)];
+};
+
 /* The agent's reading of a dump. Every field is optional and a missing one
    is correct; an invented one is corruption. Nothing here is the record. */
 function readingFrom(flags){
@@ -124,6 +140,7 @@ function readingFrom(flags){
     energy:    num(flags.energy, 1, 10),
     supps:     list(flags.supps),
     suppsAt:   hhmm(flags['supps-at'] ?? flags.suppsAt),
+    sectors:   sectorList(flags.sector ?? flags.sectors),
     tags:      list(flags.tags),
   };
   for (const k of Object.keys(r)) if (r[k] == null) delete r[k];
@@ -233,6 +250,93 @@ function cmdReading(flags, rest){
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   tasks — the reminder list
+
+   Same shape as everything else here: `tasks.log` is an append-only line of
+   events and is the record; `tasks.json` is derived from it and disposable.
+   Marking something done appends a `done` event, it never deletes the add,
+   so a week later it is still visible that the thing existed and when it
+   was finished.
+   ══════════════════════════════════════════════════════════════════════ */
+const readTaskLog = () => !fs.existsSync(TASK_LOG) ? []
+  : fs.readFileSync(TASK_LOG, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+
+/* "today" | "tomorrow" | "2026-08-09" | nothing */
+function whenToDay(v){
+  if (v == null || v === '' || v === true) return null;
+  const s = String(v).trim().toLowerCase();
+  if (s === 'today') return today();
+  if (s === 'tomorrow') return shiftDay(today(), 1);
+  if (s === 'someday' || s === 'later') return null;
+  return hhmmDate(s) || die(`bad --when "${v}". Use today, tomorrow, someday or YYYY-MM-DD`);
+}
+
+function cmdTask(sub, flags, rest){
+  const events = readTaskLog();
+  const agent = flags.agent || process.env.RAAGE_AGENT || 'unknown';
+  const append = ev => {
+    fs.mkdirSync(JOURNAL, { recursive: true });
+    fs.appendFileSync(TASK_LOG, JSON.stringify({ at: new Date().toISOString(), agent, ...ev }) + '\n');
+  };
+
+  if (sub === 'add'){
+    const text = flags.file ? fs.readFileSync(flags.file, 'utf8').trim() : rest.join(' ').trim();
+    if (!text) die('what is the task? raage task add "do the thing" --sector software --when today');
+    const id = `t${events.filter(e => e.act === 'add').length + 1}`;
+    const sector = sectorList(flags.sector)?.[0] || null;
+    append({ act:'add', id, text, sector, due: whenToDay(flags.when), by: hhmm(flags.by) });
+    ok(`task ${id}: ${text}`);
+    return id;
+  }
+  if (sub === 'done' || sub === 'drop'){
+    const id = rest[0];
+    if (!id) die(`which task? raage task ${sub} t3`);
+    if (!events.some(e => e.act === 'add' && e.id === id)) die(`no task ${id}`);
+    append({ act: sub, id, note: rest.slice(1).join(' ') || undefined });
+    ok(`task ${id} ${sub === 'done' ? 'done' : 'dropped'}`);
+    return id;
+  }
+  if (sub === 'list' || !sub){
+    const { open } = deriveTasks();
+    if (!open.length) return ok('nothing open');
+    for (const t of open)
+      console.log(`  ${t.id}  ${t.due || 'someday'}${t.by ? ' ' + t.by : ''}  ` +
+                  `[${t.sector || '-'}]  ${t.text}`);
+    return;
+  }
+  die(`unknown: raage task ${sub}. Use add, done, drop, list.`);
+}
+
+/* Replay the log into current state. Pure, so tasks.json can be deleted and
+   rebuilt byte for byte. */
+function deriveTasks(){
+  const byId = new Map();
+  for (const e of readTaskLog()){
+    if (e.act === 'add') byId.set(e.id, { id:e.id, text:e.text, sector:e.sector || null,
+                                          due:e.due || null, by:e.by || null, added:e.at, state:'open' });
+    else if (byId.has(e.id)) Object.assign(byId.get(e.id), { state: e.act, closedAt: e.at });
+  }
+  const all = [...byId.values()];
+  const rank = t => `${t.due || '9999-99-99'} ${t.by || '99:99'}`;
+  return {
+    open: all.filter(t => t.state === 'open').sort((a,b) => rank(a).localeCompare(rank(b))),
+    closed: all.filter(t => t.state !== 'open').sort((a,b) => (b.closedAt||'').localeCompare(a.closedAt||'')),
+  };
+}
+
+function writeTasks(){
+  const { open, closed } = deriveTasks();
+  if (!fs.existsSync(TASK_LOG)) return { open, closed };
+  fs.writeFileSync(TASK_JSON, JSON.stringify({
+    generated: new Date().toISOString(),
+    note: 'DERIVED FILE. Replayed from journal/tasks.log by bin/raage.mjs rebuild.',
+    today: today(),
+    open, closed: closed.slice(0, 40),
+  }, null, 1) + '\n');
+  return { open, closed };
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    rebuild — regenerate every derived file from the entries
    ══════════════════════════════════════════════════════════════════════ */
 function cmdRebuild(){
@@ -269,6 +373,7 @@ function cmdRebuild(){
       // The supplement experiment: what was taken, and every energy reading
       // of the day in order, so a before/after is visible instead of only
       // the last number of the day.
+      sectors:  [...new Set(list.flatMap(m => m.reported?.sectors || []))],
       supps:    [...new Set(list.flatMap(m => m.reported?.supps || []))],
       suppsAt:  last('suppsAt'),
       energyLog: list.filter(m => m.reported?.energy != null)
@@ -278,7 +383,7 @@ function cmdRebuild(){
       ids: list.map(m => m.id),
     };
     for (const k of Object.keys(rec)) if (rec[k] == null) delete rec[k];
-    for (const k of ['supps','energyLog']) if (!rec[k]?.length) delete rec[k];
+    for (const k of ['supps','energyLog','sectors']) if (!rec[k]?.length) delete rec[k];
     days.push(rec);
 
     // A readable per-day page for GitHub. Derived, so it is safe to rewrite.
@@ -302,8 +407,10 @@ function cmdRebuild(){
     days,
   };
   fs.writeFileSync(DAYS_JSON, JSON.stringify(out, null, 1) + '\n');
+  const { open } = writeTasks();
   ok(`rebuilt ${days.length} ${days.length === 1 ? 'day' : 'days'} from ${metas.length} ` +
-     `${metas.length === 1 ? 'entry' : 'entries'}`);
+     `${metas.length === 1 ? 'entry' : 'entries'}` +
+     (open.length ? `, ${open.length} open ${open.length === 1 ? 'task' : 'tasks'}` : ''));
   return out;
 }
 
@@ -365,6 +472,9 @@ function cmdBackup(){
    push — commit and push, so the agent never has to know git
    ══════════════════════════════════════════════════════════════════════ */
 function cmdPush(msg){
+  // RAAGE_NO_PUSH is for adding a batch of tasks in one go: push once at the
+  // end instead of once per task.
+  if (process.env.RAAGE_NO_PUSH){ ok('push skipped'); return false; }
   const git = (...a) => execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim();
   try {
     git('add', 'journal');
@@ -397,6 +507,8 @@ const HELP = `raage — record a day, verbatim.
   save  "<text>" [flags]   log + rebuild + backup + push      <- use this one
   log   "<text>" [flags]   write the entry only
   reading <id> [flags]     revise the flags on an entry (never its words)
+  task add "<text>" [--sector trading --when today|tomorrow|YYYY-MM-DD --by 22:30]
+  task done <id> | task drop <id> | tasks     the reminder list on the site
   rebuild                  regenerate days.json and journal/days/ from entries
   verify                   confirm every entry still matches its hash
   backup                   mirror to phone storage + dated snapshot
@@ -410,6 +522,7 @@ The text itself is stored untouched either way.
   --worked 6h30m   --slept 7h30m   --woke 06:10   --slept-at 23:40
   --mood 7         --energy 5      --tags deep-work,gym
   --supps "l-theanine x2,caffeine x1"   --supps-at 18:00
+  --sector job|software|trading|life    (which part of the plan it belongs to)
   --date YYYY-MM-DD   (defaults to today; older than yesterday is marked late)
   --agent claude-code|opencode|codex
 `;
@@ -426,6 +539,14 @@ switch (cmd){
     break;
   }
   case 'log':     cmdLog(flags, rest); cmdRebuild(); break;
+  case 'task': case 'tasks': {
+    const sub = cmd === 'tasks' ? 'list' : rest.shift();
+    cmdTask(sub, flags, rest);
+    if (sub && sub !== 'list'){
+      cmdRebuild(); cmdBackup(); cmdPush(`tasks: ${sub} ${rest[0] || ''}`.trim());
+    }
+    break;
+  }
   case 'reading': {
     cmdReading(flags, rest);
     const d = cmdRebuild();

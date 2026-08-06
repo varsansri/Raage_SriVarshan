@@ -467,6 +467,43 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
   border-radius:8px;padding:5px 8px;pointer-events:none;
 }
 
+/* ── the reminder list ─────────────────────────────────────────────────
+   A row is a hit target first: the tick is 26px, the whole row is 44px tall,
+   and the text wraps rather than truncating, because a truncated reminder is
+   not a reminder. */
+.tasks{display:flex;flex-direction:column;gap:2px}
+.task-h{
+  font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--faint);margin:14px 0 6px;
+}
+.task-h:first-child{margin-top:0}
+.task-h[data-k="overdue"]{color:var(--amber)}
+.task{display:flex;align-items:flex-start;gap:10px;padding:7px 0;min-height:44px}
+.task[data-going="true"]{opacity:.4;transition:opacity 140ms var(--ease-out)}
+.tick{
+  width:26px;height:26px;flex:none;margin-top:1px;border-radius:8px;
+  border:1px solid var(--line-strong);background:rgba(255,255,255,.03);
+  cursor:pointer;transition:transform 140ms var(--ease-out),background 140ms linear;
+}
+.tick:active{transform:scale(.94)}
+.tick:hover{background:rgba(255,171,46,.12);border-color:rgba(255,171,46,.4)}
+.task-t{flex:1;font-size:13px;line-height:1.45;color:var(--fg);min-width:0}
+.task-m{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none;padding-top:1px}
+.task-m i{font-style:normal;font-size:9.5px;letter-spacing:.04em}
+.sector{color:var(--faint);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+.by{font-family:var(--mono);color:var(--amber);font-variant-numeric:tabular-nums}
+.empty{font-size:12.5px;color:var(--faint);line-height:1.5}
+
+/* ── sectors ── */
+.sectors{display:flex;flex-direction:column;gap:10px}
+.sector-row{display:grid;grid-template-columns:minmax(0,8ch) 1fr 2.5ch minmax(0,9ch);
+  align-items:center;gap:9px}
+.sector-l{font-size:12px;color:var(--fg)}
+.sector-n{font-family:var(--mono);font-size:10px;color:var(--faint);text-align:right;
+  font-variant-numeric:tabular-nums}
+.sector-w{font-size:10px;color:var(--faint);text-align:right;white-space:nowrap}
+.sector-row[data-cold="true"] .sector-w{color:var(--amber)}
+
 /* ── legend: identity is never carried by colour alone ── */
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 10px}
 .legend-key{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;

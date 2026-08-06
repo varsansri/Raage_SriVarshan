@@ -79,6 +79,31 @@
     <p class="track-cap"><b id="yearPct">0%</b> of the year is gone</p>
   </section>
 
+  <!-- ══ the reminder list: what to jump on next, instead of remembering it ══ -->
+  <section class="card" id="taskCard">
+    <div class="card-head">
+      <h2 class="lbl">Next up</h2>
+      <p class="lbl faint" id="taskStat"></p>
+    </div>
+    <div id="taskList" class="tasks"></div>
+    <p class="hint" id="taskNote"></p>
+  </section>
+
+  <!-- ══ the one number every sector is for ══ -->
+  <section class="card" id="goalCard">
+    <div class="pair">
+      <div>
+        <h2 class="lbl">The goal</h2>
+        <p class="stat" id="goalAmount">&#8377;1,00,00,000</p>
+      </div>
+      <div class="pair-end">
+        <h2 class="lbl">Days left</h2>
+        <p class="stat sub" id="goalDays">&nbsp;</p>
+      </div>
+    </div>
+    <p class="hint" id="goalNote"></p>
+  </section>
+
   <!-- ══ the ledger total ══ -->
   <section class="card">
     <div class="pair">
@@ -185,6 +210,17 @@
       <summary><span class="lbl">Every reading as a table</span><span class="chev" aria-hidden="true"></span></summary>
       <div class="table-wrap"><table id="energyTable"></table></div>
     </details>
+  </section>
+
+  <!-- the three things being worked on, plus everything else -->
+  <section class="card" id="sectorCard">
+    <div class="card-head">
+      <h2 class="lbl">Sectors</h2>
+      <p class="lbl faint">this month</p>
+    </div>
+    <div id="sectorRows" class="sectors"></div>
+    <p class="hint">Which part of the plan each dump belonged to. A sector you have
+      not touched in days is the one the plan is quietly losing.</p>
   </section>
 
   <!-- the month, drawn from journal/days.json -->

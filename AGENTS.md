@@ -53,6 +53,7 @@ value is corruption.
 | `--energy` | `5` | 1-10, only if they indicated it |
 | `--supps` | `"l-theanine x2,caffeine x1"` | what they took, doses as they said them |
 | `--supps-at` | `18:00` | when they took it |
+| `--sector` | `trading,software` | which part of the plan the dump belongs to |
 | `--tags` | `deep-work,gym,admin` | short lowercase kebab tags |
 | `--date` | `2026-08-05` | defaults to today; older than yesterday is stored but marked `late` |
 | `--agent` | `claude-code` | which agent you are |
@@ -68,6 +69,45 @@ worried this journal becomes a chore." \
 
 If they mention working time, still record it here — but understand it does not
 change the measured total on the site. Those are separate on purpose.
+
+## The goal everything hangs off
+
+**One crore rupees by 17 July 2027**, from three places and nothing else:
+
+| Sector | What it is |
+|---|---|
+| `job` | the main job. Sustainable money, the thing that pays now |
+| `software` | hanubees.com. Support and software for businesses |
+| `trading` | fxabsolute.com, reactive trading, the content and the academy |
+| `life` | everything else: body, sleep, family, mood, the thinking out loud |
+
+Put a `--sector` on **every** dump. That vocabulary is fixed on purpose and the
+CLI refuses anything else: a list that grows each week cannot be compared across
+months, and the point is to see which sector went quiet.
+
+The site shows how many days each sector was touched and how long ago the last
+one was. varsansri's own diagnosis is that he forgets, and that a new day never
+starts from where the last one ended. Everything here exists to fix that, so
+**record the thinking, not only the doing** — the ideas, the fears, the reasons
+he chose something. Those are what he needs read back when he hits a wall.
+
+## Tasks: the reminder list on the site
+
+When he says "remind me", "tomorrow I need to", "the work for the rest of the
+day is" — that is a task, and it belongs on the site where he can see it:
+
+```sh
+node bin/raage.mjs task add "write 4 to 6 scripts" --sector trading --when today --by 22:00
+node bin/raage.mjs task done t1
+node bin/raage.mjs tasks            # what is open
+```
+
+`--when` takes `today`, `tomorrow`, `someday`, or a date. `journal/tasks.log` is
+append-only and is the record; `tasks.json` is derived by `rebuild`. Finishing a
+task appends a `done` event and never deletes the add, so the day still shows
+what was finished. He can also tick tasks off on the site itself.
+
+Keep the task in his words. A task he does not recognise is one he will ignore.
 
 ## The mental-energy experiment
 
