@@ -490,7 +490,10 @@ function cmdBackup(){
   };
   copyDir(ENTRIES, path.join(mirror, 'entries'));
   copyDir(DAYS, path.join(mirror, 'days'));
-  for (const f of [DAYS_JSON, MANIFEST])
+  // Every loose file the journal owns, not just days.json: the task log and
+  // the readings log are records too, and a backup missing them is not one.
+  for (const f of [DAYS_JSON, MANIFEST, TASK_LOG, TASK_JSON,
+                   path.join(JOURNAL, 'READINGS.log')])
     if (fs.existsSync(f)) { fs.copyFileSync(f, path.join(mirror, path.basename(f))); copied++; }
   ok(`mirrored ${copied} files to ${mirror}`);
 
