@@ -20,8 +20,11 @@ array of events; every number on screen is `reduce()`d fresh. Nothing to corrupt
 A correction is a *new* event with a signed delta — accounting-style. Your mistakes
 stay visible, which is the point.
 
-**3. Never trust the device clock.** Timestamps come from GitHub's HTTP `Date`
-header, not your phone. Elapsed time comes from `performance.now()`, which is
+**3. Never trust the device clock.** Timestamps come from the `Date` header that
+GitHub's edge stamps on a HEAD request to this site — read *same-origin*, because
+`Date` is not a CORS-safelisted response header and comes back `null` from any
+cross-origin host (`api.github.com` included). Elapsed time comes from
+`performance.now()`, which is
 monotonic and unaffected by clock changes. If wall-clock and monotonic time diverge
 mid-session by >5s, the session is permanently flagged `[clock]` in the ledger.
 Changing your phone's date does nothing except earn you a red banner.

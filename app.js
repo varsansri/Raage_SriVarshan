@@ -34,18 +34,29 @@ let cfg     = Object.assign({ goalH:8, targetH:2000, repo:'', token:'' }, load(K
 /* ══════════ time authority ══════════
    Elapsed time comes from performance.now() (monotonic — immune to clock
    changes). Timestamps come from GitHub's server clock. The device clock is
-   used for nothing except detecting that it's wrong.                     */
+   used for nothing except detecting that it's wrong.
+
+   The clock is read from the `Date` header of a HEAD request to our own Pages
+   origin. It must be same-origin: `Date` is NOT a CORS-safelisted response
+   header, so on a cross-origin response (api.github.com included, which does
+   not list Date in Access-Control-Expose-Headers) headers.get('date') returns
+   null. Same-origin exposes every header. GitHub's edge stamps `Date` with the
+   current time on cache hits too — `age` is only how long the *body* was
+   cached, so it must not be added.                                        */
 const Time = {
   offset: 0, synced: false, skew: 0,
   now(){ return Date.now() + this.offset; },
   async sync(){
     try {
       const t0 = performance.now();
-      const r = await fetch('https://api.github.com/zen', { method:'HEAD', cache:'no-store' });
+      const r = await fetch(`./?t=${Date.now()}${Math.random()}`,
+                            { method:'HEAD', cache:'no-store' });
       const rtt = performance.now() - t0;
       const hdr = r.headers.get('date');
       if (!hdr) throw new Error('no date header');
       const server = new Date(hdr).getTime() + rtt / 2;
+      if (!Number.isFinite(server) || Math.abs(server - TARGET) > 20 * 3.156e10)
+        throw new Error('implausible server time');
       this.offset = server - Date.now();
       this.skew   = this.offset;
       this.synced = true;
