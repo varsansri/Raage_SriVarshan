@@ -587,14 +587,19 @@ const isIOS = () =>
   /iphone|ipad|ipod/i.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+const INSTALL_COPY = {
+  prompt: ['Install as an app', 'Full screen, offline, no browser bar'],
+  ios:    ['Add to your home screen', 'Tap Share, then "Add to Home Screen"'],
+  manual: ['Install as an app', 'Use your browser menu, then "Install app"'],
+};
+
 function showInstall(mode){
   if (isStandalone()) return;
+  if (mode === 'manual' && load('grind.installSeen', false)) return;
   const w = $('installWrap');
+  if (w.dataset.mode === 'prompt' && mode !== 'prompt') return;  // never downgrade
   w.dataset.mode = mode;
-  if (mode === 'ios'){
-    $('installTitle').textContent = 'Add to your home screen';
-    $('installSub').textContent = 'Share, then "Add to Home Screen"';
-  }
+  [$('installTitle').textContent, $('installSub').textContent] = INSTALL_COPY[mode];
   w.hidden = false;
 }
 const hideInstall = () => { $('installWrap').hidden = true; };
@@ -612,9 +617,11 @@ window.addEventListener('appinstalled', () => {
 });
 
 $('install').onclick = async () => {
+  // No event means this browser installs from its own menu, so say where.
   if (!installEvent){
-    if (isIOS()) return toast('use Share, then Add to Home Screen');
-    return toast('your browser handles this from its own menu');
+    toast(INSTALL_COPY[$('installWrap').dataset.mode || 'manual'][1]);
+    save('grind.installSeen', true);
+    return;
   }
   installEvent.prompt();
   const { outcome } = await installEvent.userChoice;
@@ -623,9 +630,12 @@ $('install').onclick = async () => {
   else toast('you can install any time from here');
 };
 
-// iOS never fires the event, and an already-installed app must not be asked
-// to install itself again.
-if (isIOS() && !isStandalone()) showInstall('ios');
+/* Browsers that never fire beforeinstallprompt (iOS Safari, Firefox, Samsung
+   Internet, desktop Safari) can still install, just from their own menu. Wait
+   long enough for the event to arrive, then fall back to telling the user
+   where to look rather than showing them nothing. */
+if (!isStandalone())
+  setTimeout(() => { if (!installEvent) showInstall(isIOS() ? 'ios' : 'manual'); }, 2500);
 matchMedia('(display-mode: standalone)').addEventListener('change', e => {
   if (e.matches) hideInstall();
 });
