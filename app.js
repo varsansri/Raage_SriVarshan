@@ -756,7 +756,157 @@ function renderMonth(){
     ? 'Self-reported, from what you dictated. Separate from the measured ledger above.'
     : 'Nothing recorded for this month yet. Send a dump through your agent or paste one above.';
 
+  drawTags(logged);
   drawTable(rows);
+  renderEnergy(rows);
+}
+
+/* ── what the days were made of ────────────────────────────────────────
+   Ranked magnitude, so horizontal bars sorted long to short, not a pie and
+   not a word cloud. One series, so no legend and no second hue: the count
+   is the length of the bar and is also printed, because eight bars of
+   nearly equal length are unreadable otherwise. */
+function drawTags(logged){
+  const counts = new Map();
+  for (const x of logged)
+    for (const t of x.r.tags || []) counts.set(t, (counts.get(t) || 0) + 1);
+
+  const top = [...counts].sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8);
+  // One or two days makes every count 1, and eight equal bars sorted
+  // alphabetically is a ranking of nothing. Wait for a real one.
+  const rankable = logged.length >= 3 && top.some(([, n]) => n > 1);
+  $('tagFig').hidden = !rankable;
+  if (!rankable){ $('tagBars').innerHTML = ''; return; }
+
+  const max = top[0][1];
+  $('tagBars').innerHTML = top.map(([t, n]) => `
+    <div class="bar-row">
+      <span class="bar-l">${escapeHtml(t)}</span>
+      <span class="bar-t"><i style="width:${Math.max(3, (n/max)*100)}%"></i></span>
+      <span class="bar-n">${n}</span>
+    </div>`).join('');
+}
+
+/* ══════════ the supplement experiment ════════════════════════════════
+   The question is whether the stack moves mental energy, and the honest
+   answer for a long while is "not enough days yet". So the comparison
+   tiles stay blank until both sides have MIN_DAYS behind them, rather
+   than printing an average of one day as though it meant something.  */
+
+const MIN_DAYS = 5;
+
+function renderEnergy(rows){
+  const withE = rows.filter(x => x.r?.energy != null);
+  const onS   = withE.filter(x => x.r.supps?.length);
+  const offS  = withE.filter(x => !x.r.supps?.length);
+  const avg = a => a.length ? a.reduce((p,c) => p + c.r.energy, 0) / a.length : null;
+  const suppDays = rows.filter(x => x.r?.supps?.length);
+
+  $('energyStat').textContent = withE.length
+    ? `${withE.length} ${withE.length === 1 ? 'reading' : 'readings'} this month`
+    : 'no readings yet';
+
+  const enough = onS.length >= MIN_DAYS && offS.length >= MIN_DAYS;
+  const short = (have, side) => {
+    const n = MIN_DAYS - have;
+    return `${n} more ${n === 1 ? 'day' : 'days'} ${side} to compare`;
+  };
+  const diff = enough ? avg(onS) - avg(offS) : null;
+  $('energyTiles').innerHTML = [
+    tile('On the stack', onS.length >= MIN_DAYS ? avg(onS).toFixed(1) : '&mdash;',
+         onS.length >= MIN_DAYS ? `average of ${onS.length} days` : short(onS.length, 'on it')),
+    tile('Without', offS.length >= MIN_DAYS ? avg(offS).toFixed(1) : '&mdash;',
+         offS.length >= MIN_DAYS ? `average of ${offS.length} days` : short(offS.length, 'without')),
+    tile('Difference', enough ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)}` : '&mdash;',
+         enough ? 'points of energy' : 'held back until both sides fill'),
+    tile('Days on the stack', `${suppDays.length}`, 'this month'),
+  ].join('');
+
+  drawEnergy($('energyPlot'), rows);
+
+  // The reminder. It names the one thing missing right now, and says
+  // nothing at all when nothing is missing.
+  const p = istParts(Time.now());
+  const todayKey = `${p.year}-${p.month}-${p.day}`;
+  const t = rows.find(x => x.day === todayKey)?.r;
+  const log = t?.energyLog || [];
+  let msg = '';
+  if (!t) msg = 'Nothing recorded today yet. The experiment only works on days you rate.';
+  else if (!log.length) msg = 'No energy reading today. Say how you feel, 1 to 10, and your agent records it.';
+  else if (t.supps?.length && log.length === 1)
+    msg = `One reading today, at ${log[0].at}. Rate yourself again later so the before and after both exist.`;
+  else if (!t.supps?.length && log.length)
+    msg = 'Rated, no supplements logged today. That is a valid off day for the comparison.';
+  $('energyRemind').hidden = !msg;
+  $('energyRemindText').textContent = msg;
+
+  const stack = t?.supps?.length
+    ? `Today: ${t.supps.join(', ')}${t.suppsAt ? ` at ${t.suppsAt}` : ''}. `
+    : '';
+  $('energyNote').textContent = stack +
+    'Self-reported on the day, from your own words. An average over a handful of days ' +
+    'cannot separate the stack from sleep, work or mood, so treat it as a signal to look at, not a result.';
+
+  drawEnergyTable(rows.filter(x => x.r?.energy != null || x.r?.supps?.length));
+}
+
+/* Same column spec as the hours chart. The second encoding is not colour
+   alone: the legend names both states, every bar's tooltip says which it
+   is, and the table below spells it out. */
+function drawEnergy(host, rows){
+  const W = 100, H = 34, base = H - 6, top = 5, MAX = 10;
+  const n = rows.length, band = W / n;
+  const bw = Math.max(0.8, band - Math.min(2 * (W / (host.clientWidth || 340)), band * 0.35));
+  const scale = v => (v / MAX) * (base - top);
+
+  let marks = '', hits = '';
+  rows.forEach((x, i) => {
+    const cx = i * band + band / 2, v = x.r?.energy ?? null, on = !!x.r?.supps?.length;
+    if (v != null){
+      const h = Math.max(1.2, scale(v)), r = Math.min(bw / 2, 1.4);
+      marks += `<path d="M${cx-bw/2} ${base} v${-(h-r)} a${r} ${r} 0 0 1 ${bw} 0 v${h-r} z"
+        fill="${on ? 'var(--amber)' : 'var(--muted)'}"/>`;
+    } else if (on){
+      // Took the stack, never rated the day: a stub, so the gap is visible.
+      marks += `<rect x="${cx-bw/2}" y="${base-0.9}" width="${bw}" height="0.9" fill="var(--amber-deep)"/>`;
+    }
+    const what = v == null ? (on ? 'supplements, not rated' : 'not rated')
+                           : `${v}/10 · ${on ? 'supplements' : 'none'}`;
+    hits += `<rect class="hit" x="${i*band}" y="${top-3}" width="${band}" height="${base-top+6}"
+      fill="transparent" data-t="${x.day} · ${what}"/>`;
+  });
+
+  const ticks = [10, 5].map(v =>
+    `<line x1="0" y1="${base-scale(v)}" x2="${W}" y2="${base-scale(v)}"
+       stroke="rgba(255,255,255,.07)" stroke-width=".25"/>`).join('');
+  const rated = rows.filter(x => x.r?.energy != null);
+  const best = rated.reduce((a,b) => (b.r.energy > (a?.r.energy ?? -1) ? b : a), null);
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+      role="img" aria-label="Self-rated mental energy per day, 1 to 10">
+    ${ticks}
+    <line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="rgba(255,255,255,.12)" stroke-width=".25"/>
+    ${marks}${hits}
+  </svg>
+  <div class="axis"><span>${rows[0].n}</span><span>${rows[rows.length-1].n}</span></div>
+  <p class="peak">${rated.length
+      ? `best so far: ${best.day.slice(5)} at ${best.r.energy}/10 · ${rated.length} of ${n} days rated`
+      : 'no days rated yet. Every rating you give fills one column'}</p>
+  <p class="tip" hidden></p>`;
+  wireTips(host);
+}
+
+function drawEnergyTable(have){
+  $('energyTable').innerHTML = !have.length
+    ? '<caption>No energy readings yet.</caption>'
+    : `<caption>Self-rated energy and what was taken that day</caption>
+       <thead><tr><th>Day</th><th>Energy</th><th>Readings</th><th>Supplements</th></tr></thead>
+       <tbody>${have.map(x => `<tr>
+         <td>${x.r.day.slice(5)}</td>
+         <td>${x.r.energy != null ? `${x.r.energy}/10` : '-'}</td>
+         <td>${(x.r.energyLog || []).map(e => `${e.at} ${e.v}`).join(', ') || '-'}</td>
+         <td>${x.r.supps?.length ? escapeHtml(x.r.supps.join(', ')) : '-'}</td>
+       </tr>`).join('')}</tbody>`;
 }
 
 const tile = (label, value, sub) =>

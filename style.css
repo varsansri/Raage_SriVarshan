@@ -454,6 +454,7 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
 .plot svg{width:100%;display:block}
 #hoursPlot svg{height:132px}
 #wakePlot svg{height:96px}
+#energyPlot svg{height:112px}
 .plot .hit{cursor:crosshair}
 .axis{display:flex;justify-content:space-between;margin-top:5px}
 .axis span{font-family:var(--mono);font-size:9.5px;color:var(--faint);
@@ -465,6 +466,34 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
   background:rgba(8,8,10,.9);border:1px solid var(--line-strong);
   border-radius:8px;padding:5px 8px;pointer-events:none;
 }
+
+/* ── legend: identity is never carried by colour alone ── */
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 10px}
+.legend-key{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;
+  color:var(--faint);white-space:nowrap}
+.sw{width:9px;height:9px;border-radius:2px;flex:none}
+.sw.on{background:var(--amber)}
+.sw.off{background:var(--muted)}
+
+/* ── the standing reminder: one line, only when something is missing ── */
+.remind{
+  display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;
+  padding:10px 12px;border-radius:var(--r-ctl);
+  background:rgba(255,171,46,.07);border:1px solid rgba(255,171,46,.28);
+  font-size:12px;line-height:1.45;color:var(--fg);
+}
+.remind[hidden]{display:none}
+.remind .i{width:15px;height:15px;flex:none;margin-top:1px;color:var(--amber)}
+
+/* ── ranked bars: magnitude by length, count printed because near-equal
+      bars are unreadable on their own ── */
+.bars{display:flex;flex-direction:column;gap:7px}
+.bar-row{display:grid;grid-template-columns:minmax(0,9.5ch) 1fr 2.5ch;align-items:center;gap:9px}
+.bar-l{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-t{height:8px;border-radius:2px;background:rgba(255,255,255,.05);overflow:hidden}
+.bar-t i{display:block;height:100%;border-radius:2px;background:var(--amber-deep)}
+.bar-n{font-family:var(--mono);font-size:10px;color:var(--faint);text-align:right;
+  font-variant-numeric:tabular-nums}
 
 /* ── table view ── */
 .table-view{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
@@ -508,6 +537,7 @@ tbody td:first-child{color:var(--fg)}
   .month-name{font-size:11px;min-width:9ch}
   #hoursPlot svg{height:112px}
   #wakePlot svg{height:84px}
+  #energyPlot svg{height:96px}
 }
 @media (min-width:560px){
   main{padding:28px 20px 40px}

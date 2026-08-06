@@ -86,6 +86,13 @@ const num = (v, lo, hi) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : null;
 };
+/* Supplements are kept as free text, one per item: "l-theanine x2".
+   Not parsed into doses, because a wrong dose is worse than no dose. */
+const list = v => {
+  if (v == null || v === '' || v === true) return null;
+  const a = String(v).split(',').map(s => s.trim()).filter(Boolean);
+  return a.length ? a : null;
+};
 
 /* ── argv ───────────────────────────────────────────────────────────── */
 function parseArgs(argv){
@@ -104,6 +111,25 @@ function parseArgs(argv){
 const readStdin = () => {
   try { return fs.readFileSync(0, 'utf8'); } catch { return ''; }
 };
+
+/* The agent's reading of a dump. Every field is optional and a missing one
+   is correct; an invented one is corruption. Nothing here is the record. */
+function readingFrom(flags){
+  const r = {
+    workedMin: toMinutes(flags.worked),
+    sleptMin:  toMinutes(flags.slept),
+    woke:      hhmm(flags.woke),
+    sleptAt:   hhmm(flags['slept-at'] ?? flags.sleptAt),
+    mood:      num(flags.mood, 1, 10),
+    energy:    num(flags.energy, 1, 10),
+    supps:     list(flags.supps),
+    suppsAt:   hhmm(flags['supps-at'] ?? flags.suppsAt),
+    tags:      list(flags.tags),
+  };
+  for (const k of Object.keys(r)) if (r[k] == null) delete r[k];
+  if (!r.tags) r.tags = [];
+  return r;
+}
 
 /* ══════════════════════════════════════════════════════════════════════
    log — write one verbatim entry
@@ -151,18 +177,8 @@ function cmdLog(flags, rest){
     sha256: sha(raw),
     // Everything below is the agent's reading of the text. The text itself
     // is the record; these exist only so the site can draw a chart.
-    reported: {
-      workedMin: toMinutes(flags.worked),
-      sleptMin:  toMinutes(flags.slept),
-      woke:      hhmm(flags.woke),
-      sleptAt:   hhmm(flags['slept-at'] ?? flags.sleptAt),
-      mood:      num(flags.mood, 1, 10),
-      energy:    num(flags.energy, 1, 10),
-      tags: flags.tags ? String(flags.tags).split(',').map(t => t.trim()).filter(Boolean) : [],
-    },
+    reported: readingFrom(flags),
   };
-  for (const k of Object.keys(meta.reported))
-    if (meta.reported[k] == null) delete meta.reported[k];
 
   fs.writeFileSync(path.join(ENTRIES, `${id}.json`), JSON.stringify(meta, null, 2) + '\n');
   fs.appendFileSync(MANIFEST, `${meta.sha256}  ${id}.txt  ${meta.bytes}\n`);
@@ -175,6 +191,46 @@ function cmdLog(flags, rest){
   return meta;
 }
 const hhmmDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? String(d) : null;
+
+/* ══════════════════════════════════════════════════════════════════════
+   reading — revise the FLAGS on an entry, never its words
+
+   The .txt is the record and is append-only. The .json sidecar holds the
+   agent's reading of it, which is a different kind of thing: if they say
+   "actually that was 6 out of 10", the reading was wrong and should be
+   corrected. So this touches the sidecar only, never the text (verify
+   hashes the .txt, and still passes), and every change is appended to
+   READINGS.log so a revised reading can never happen silently.
+   ══════════════════════════════════════════════════════════════════════ */
+function cmdReading(flags, rest){
+  const id = rest[0] || flags.entry;
+  if (!id) die('which entry? raage reading <entry-id> --energy 7  (see raage show)');
+  const f = path.join(ENTRIES, `${id}.json`);
+  if (!fs.existsSync(f)) die(`no entry ${id}`);
+
+  const meta = JSON.parse(fs.readFileSync(f, 'utf8'));
+  const next = readingFrom(flags);
+  if (!Object.keys(next).filter(k => k !== 'tags' || next.tags.length).length)
+    die('nothing to record. Pass at least one flag, e.g. --energy 7 --supps caffeine');
+
+  const before = { ...meta.reported };
+  const merged = { ...meta.reported, ...next };
+  // Tags add, they do not replace: an earlier reading's tags are still true.
+  merged.tags = [...new Set([...(before.tags || []), ...(next.tags || [])])];
+  meta.reported = merged;
+  (meta.readings ||= []).push({
+    at: new Date().toISOString(),
+    agent: flags.agent || process.env.RAAGE_AGENT || 'unknown',
+    set: next,
+  });
+
+  fs.writeFileSync(f, JSON.stringify(meta, null, 2) + '\n');
+  fs.appendFileSync(path.join(JOURNAL, 'READINGS.log'),
+    `${new Date().toISOString()}  ${id}  ${JSON.stringify(next)}\n`);
+  ok(`reading on ${id}: ` +
+     Object.entries(next).map(([k,v]) => `${k}=${Array.isArray(v)?v.join('/'):v}`).join('  '));
+  return meta;
+}
 
 /* ══════════════════════════════════════════════════════════════════════
    rebuild — regenerate every derived file from the entries
@@ -210,11 +266,19 @@ function cmdRebuild(){
       sleptAt:   last('sleptAt'),
       mood:      last('mood'),
       energy:    last('energy'),
+      // The supplement experiment: what was taken, and every energy reading
+      // of the day in order, so a before/after is visible instead of only
+      // the last number of the day.
+      supps:    [...new Set(list.flatMap(m => m.reported?.supps || []))],
+      suppsAt:  last('suppsAt'),
+      energyLog: list.filter(m => m.reported?.energy != null)
+                     .map(m => ({ at: m.localTime, v: m.reported.energy })),
       tags: [...new Set(list.flatMap(m => m.reported?.tags || []))],
       late: list.some(m => m.late) || undefined,
       ids: list.map(m => m.id),
     };
     for (const k of Object.keys(rec)) if (rec[k] == null) delete rec[k];
+    for (const k of ['supps','energyLog']) if (!rec[k]?.length) delete rec[k];
     days.push(rec);
 
     // A readable per-day page for GitHub. Derived, so it is safe to rewrite.
@@ -265,6 +329,9 @@ function cmdVerify(){
    backup — phone mirror plus a dated snapshot
    ══════════════════════════════════════════════════════════════════════ */
 function cmdBackup(){
+  // RAAGE_NO_PHONE exists for the tests: they run a throwaway copy of this
+  // script, and a throwaway journal must never reach the real phone mirror.
+  if (process.env.RAAGE_NO_PHONE){ ok('phone mirror disabled'); return false; }
   if (!fs.existsSync('/sdcard')){ ok('no /sdcard here, skipping the phone mirror'); return false; }
   let copied = 0;
   const mirror = path.join(PHONE_MIRROR, 'journal');
@@ -329,6 +396,7 @@ const HELP = `raage — record a day, verbatim.
 
   save  "<text>" [flags]   log + rebuild + backup + push      <- use this one
   log   "<text>" [flags]   write the entry only
+  reading <id> [flags]     revise the flags on an entry (never its words)
   rebuild                  regenerate days.json and journal/days/ from entries
   verify                   confirm every entry still matches its hash
   backup                   mirror to phone storage + dated snapshot
@@ -341,6 +409,7 @@ Flags, all optional. These are YOUR reading of the text, for the charts.
 The text itself is stored untouched either way.
   --worked 6h30m   --slept 7h30m   --woke 06:10   --slept-at 23:40
   --mood 7         --energy 5      --tags deep-work,gym
+  --supps "l-theanine x2,caffeine x1"   --supps-at 18:00
   --date YYYY-MM-DD   (defaults to today; older than yesterday is marked late)
   --agent claude-code|opencode|codex
 `;
@@ -357,6 +426,13 @@ switch (cmd){
     break;
   }
   case 'log':     cmdLog(flags, rest); cmdRebuild(); break;
+  case 'reading': {
+    cmdReading(flags, rest);
+    const d = cmdRebuild();
+    cmdBackup();
+    cmdPush(`journal: reading on ${rest[0] || flags.entry} · ${d.totalEntries} entries`);
+    break;
+  }
   case 'rebuild': cmdRebuild(); break;
   case 'verify':  process.exit(cmdVerify() ? 0 : 1);
   case 'backup':  cmdBackup(); break;

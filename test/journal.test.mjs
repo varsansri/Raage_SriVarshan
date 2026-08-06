@@ -19,7 +19,8 @@ mkdirSync(join(box, 'bin'));
 copyFileSync(join(REPO, 'bin/raage.mjs'), join(box, 'bin/raage.mjs'));
 
 const raage = (...args) => execFileSync('node', ['bin/raage.mjs', ...args],
-  { cwd: box, encoding: 'utf8', env: { ...process.env, TZ: 'Asia/Kolkata' } });
+  { cwd: box, encoding: 'utf8',
+    env: { ...process.env, TZ: 'Asia/Kolkata', RAAGE_NO_PHONE: '1' } });
 /* Returns the metadata of the entry a log call just wrote, by reading the id
    out of its output. Filename sorting is not a safe way to find it. */
 const logged = (...args) => {
@@ -119,6 +120,37 @@ ok(lateMeta.late === true, 'flagged late so charts stay honest');
 let refused = false;
 try { raage('log', 'from the future', '--date', '2030-01-01'); } catch { refused = true; }
 ok(refused, 'a future date is refused');
+
+console.log('\n── the supplement experiment ──');
+rmSync(join(box, 'journal'), { recursive: true, force: true });
+const morning = logged('woke up fuzzy', '--energy', '4');
+const evening = logged('took the stack, feel sharper',
+  '--supps', 'l-theanine x2, caffeine x1', '--supps-at', '18:00', '--energy', '7');
+ok(JSON.stringify(evening.reported.supps) === '["l-theanine x2","caffeine x1"]',
+   'supplements split on commas, doses left as written');
+ok(evening.reported.suppsAt === '18:00', 'when it was taken');
+ok(morning.reported.supps === undefined, 'an entry with no supplements has no supps field');
+const day = days().days[0];
+ok(JSON.stringify(day.supps) === '["l-theanine x2","caffeine x1"]', 'the day carries the stack');
+ok(day.energy === 7, 'the day keeps the latest energy reading');
+ok(day.energyLog.length === 2 && day.energyLog[0].v === 4 && day.energyLog[1].v === 7,
+   'every reading of the day is kept in order, so a before and after exists');
+
+console.log('\n── a reading can be revised, the words cannot ──');
+const before2 = readEntry(`${morning.id}.txt`);
+raage('reading', morning.id, '--energy', '6', '--tags', 'supplements', '--agent', 'test');
+const revised = JSON.parse(readEntry(`${morning.id}.json`));
+ok(readEntry(`${morning.id}.txt`) === before2, 'revising a reading never touches the text');
+ok(raage('verify').includes('2/2 entries verbatim'), 'verify still passes after a revision');
+ok(revised.reported.energy === 6, 'the corrected reading replaced the old one');
+ok(revised.reported.tags.includes('supplements'), 'tags add rather than replace');
+ok(revised.readings.length === 1 && revised.readings[0].set.energy === 6,
+   'the entry remembers that the reading was revised');
+ok(readFileSync(join(box, 'journal/READINGS.log'), 'utf8').includes(morning.id),
+   'and the revision is appended to READINGS.log');
+let bad = false;
+try { raage('reading', 'nope-not-an-entry', '--energy', '5'); } catch { bad = true; }
+ok(bad, 'a reading on an entry that does not exist is refused');
 
 console.log('\n── the ledger is never touched ──');
 ok(!existsSync(join(box, 'ledger')), 'no writes anywhere near ledger/');

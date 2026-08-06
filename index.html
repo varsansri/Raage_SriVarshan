@@ -156,6 +156,37 @@
       Nothing is rewritten or summarised.</p>
   </section>
 
+  <!-- the supplement experiment: does the stack actually move mental energy? -->
+  <section class="card" id="energyCard">
+    <div class="card-head">
+      <h2 class="lbl">Mental energy</h2>
+      <p class="lbl faint" id="energyStat"></p>
+    </div>
+
+    <p class="remind" id="energyRemind" hidden>
+      <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-alert"/></svg>
+      <span id="energyRemindText"></span>
+    </p>
+
+    <div class="tiles" id="energyTiles"></div>
+
+    <figure class="fig">
+      <figcaption>Mental energy, 1 to 10, per day</figcaption>
+      <div class="legend">
+        <span class="legend-key"><i class="sw on"></i>on the stack</span>
+        <span class="legend-key"><i class="sw off"></i>without</span>
+      </div>
+      <div class="plot" id="energyPlot"></div>
+    </figure>
+
+    <p class="hint" id="energyNote"></p>
+
+    <details class="table-view">
+      <summary><span class="lbl">Every reading as a table</span><span class="chev" aria-hidden="true"></span></summary>
+      <div class="table-wrap"><table id="energyTable"></table></div>
+    </details>
+  </section>
+
   <!-- the month, drawn from journal/days.json -->
   <section class="card" id="monthCard">
     <div class="card-head">
@@ -181,6 +212,11 @@
     <figure class="fig">
       <figcaption>Time you got up</figcaption>
       <div class="plot" id="wakePlot"></div>
+    </figure>
+
+    <figure class="fig" id="tagFig" hidden>
+      <figcaption>What the days were made of</figcaption>
+      <div class="bars" id="tagBars"></div>
     </figure>
 
     <p class="hint" id="monthNote"></p>

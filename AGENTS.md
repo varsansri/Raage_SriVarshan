@@ -51,6 +51,8 @@ value is corruption.
 | `--slept-at` | `23:40` | when they went to bed |
 | `--mood` | `7` | 1-10, only if they indicated it |
 | `--energy` | `5` | 1-10, only if they indicated it |
+| `--supps` | `"l-theanine x2,caffeine x1"` | what they took, doses as they said them |
+| `--supps-at` | `18:00` | when they took it |
 | `--tags` | `deep-work,gym,admin` | short lowercase kebab tags |
 | `--date` | `2026-08-05` | defaults to today; older than yesterday is stored but marked `late` |
 | `--agent` | `claude-code` | which agent you are |
@@ -66,6 +68,34 @@ worried this journal becomes a chore." \
 
 If they mention working time, still record it here — but understand it does not
 change the measured total on the site. Those are separate on purpose.
+
+## The mental-energy experiment
+
+varsansri is testing whether a supplement stack actually moves his mental
+energy. The site compares energy on supplement days against energy on days
+without, and it will not show a comparison until both sides have five days.
+That only works if you do two things:
+
+- Record `--energy 1-10` **whenever they say how they feel**, even in passing,
+  even mid-day. Several readings in one day is the point: the site keeps them
+  all, in order, so a before and after exists.
+- Record `--supps` on the day they took something, with `--supps-at`.
+
+Never guess the number. "I feel good" is not a 7. Ask them for the number, or
+leave it out.
+
+## Revising a reading
+
+The words are append-only forever. Your *reading* of them is not — if they say
+"that was more like a 6", the flag was wrong and should be corrected:
+
+```sh
+node bin/raage.mjs reading 2026-08-06T13-55-43Z --energy 6 --supps caffeine
+```
+
+This rewrites only the `.json` sidecar, never the `.txt`, appends the change to
+`journal/READINGS.log`, and rebuilds. `verify` still passes, because it hashes
+the words. Tags add rather than replace. Everything else overwrites.
 
 ## Where it goes
 
