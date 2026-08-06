@@ -15,6 +15,29 @@
       "experiment",
       "walking",
       "fuzzy"
-    ]
-  }
+    ],
+    "supps": [
+      "l-theanine x2",
+      "caffeine x1",
+      "alpha-gpc x2",
+      "creatine 1 scoop"
+    ],
+    "suppsAt": "18:00"
+  },
+  "readings": [
+    {
+      "at": "2026-08-06T14:00:11.162Z",
+      "agent": "claude-code",
+      "set": {
+        "supps": [
+          "l-theanine x2",
+          "caffeine x1",
+          "alpha-gpc x2",
+          "creatine 1 scoop"
+        ],
+        "suppsAt": "18:00",
+        "tags": []
+      }
+    }
+  ]
 }

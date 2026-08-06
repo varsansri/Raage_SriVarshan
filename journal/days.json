@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-06T13:55:43.704Z",
+ "generated": "2026-08-06T14:00:11.229Z",
  "note": "DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. Self-reported numbers, not the measured ledger.",
  "totalEntries": 3,
  "totalWords": 2078,
@@ -9,6 +9,13 @@
    "entries": 3,
    "words": 2078,
    "woke": "07:30",
+   "supps": [
+    "l-theanine x2",
+    "caffeine x1",
+    "alpha-gpc x2",
+    "creatine 1 scoop"
+   ],
+   "suppsAt": "18:00",
    "tags": [
     "skincare",
     "journal-app",
