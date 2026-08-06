@@ -1,7 +1,27 @@
 {
- "generated": "2026-08-06T07:35:33.736Z",
+ "generated": "2026-08-06T13:41:22.993Z",
  "note": "DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. Self-reported numbers, not the measured ledger.",
- "totalEntries": 0,
- "totalWords": 0,
- "days": []
+ "totalEntries": 1,
+ "totalWords": 791,
+ "days": [
+  {
+   "day": "2026-08-06",
+   "entries": 1,
+   "words": 791,
+   "woke": "07:30",
+   "tags": [
+    "skincare",
+    "journal-app",
+    "job-work",
+    "seo",
+    "youtube",
+    "short-form-scroll",
+    "nap",
+    "exhausted"
+   ],
+   "ids": [
+    "2026-08-06T13-41-22Z"
+   ]
+  }
+ ]
 }
