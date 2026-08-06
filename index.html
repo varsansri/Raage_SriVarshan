@@ -37,6 +37,12 @@
   <symbol id="i-chev" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M6.2 3.4 10.8 8l-4.6 4.6"/>
   </symbol>
+  <symbol id="i-book" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.6 3.1c0-.6.5-1.1 1.1-1.1H8v12H3.7c-.6 0-1.1-.5-1.1-1.1V3.1Z"/><path d="M8 2h4.3c.6 0 1.1.5 1.1 1.1v9.8c0 .6-.5 1.1-1.1 1.1H8"/>
+  </symbol>
+  <symbol id="i-left" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.8 3.4 5.2 8l4.6 4.6"/>
+  </symbol>
   <symbol id="i-download" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M8 2.9v7.7"/><path d="M5.2 7.8 8 10.6l2.8-2.8"/><path d="M2.6 10.4v1.9c0 .6.5 1.1 1.1 1.1h8.6c.6 0 1.1-.5 1.1-1.1v-1.9"/>
   </symbol>
@@ -132,6 +138,57 @@
       <span class="key" data-lvl="4"></span>
       <span class="scale-txt">unworked to 8h+</span>
     </p>
+  </section>
+
+  <!-- journal: paste a dump, stored verbatim -->
+  <section class="card">
+    <div class="card-head">
+      <h2 class="lbl">Journal</h2>
+      <p class="lbl faint" id="journalStat"></p>
+    </div>
+    <span class="field wide">
+      <label for="dump">Paste a dump</label>
+      <textarea id="dump" rows="5" spellcheck="false"
+        placeholder="woke around 6, groggy. three hours on the ledger bug then gym. worried this becomes a chore."></textarea>
+    </span>
+    <button id="saveDump" class="btn-sub">Save this entry</button>
+    <p class="hint" id="dumpState">Stored word for word, with the date and time you sent it.
+      Nothing is rewritten or summarised.</p>
+  </section>
+
+  <!-- the month, drawn from journal/days.json -->
+  <section class="card" id="monthCard">
+    <div class="card-head">
+      <h2 class="lbl">The month</h2>
+      <div class="stepper">
+        <button type="button" id="monthPrev" aria-label="Previous month">
+          <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-left"/></svg>
+        </button>
+        <p class="month-name" id="monthName">&nbsp;</p>
+        <button type="button" id="monthNext" aria-label="Next month">
+          <svg class="i flip" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-left"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+
+    <figure class="fig">
+      <figcaption>Hours reported per day</figcaption>
+      <div class="plot" id="hoursPlot"></div>
+    </figure>
+
+    <figure class="fig">
+      <figcaption>Time you got up</figcaption>
+      <div class="plot" id="wakePlot"></div>
+    </figure>
+
+    <p class="hint" id="monthNote"></p>
+
+    <details class="table-view">
+      <summary><span class="lbl">Every day as a table</span><span class="chev" aria-hidden="true"></span></summary>
+      <div class="table-wrap"><table id="monthTable"></table></div>
+    </details>
   </section>
 
   <!-- ══ corrections, appended and never edited ══ -->

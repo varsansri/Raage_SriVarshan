@@ -18,6 +18,7 @@
   --bg:#08080a;
   --surface:rgba(24,24,29,.72);
   --surface-solid:#101014;
+  --surface-ring:#16161a;   /* what a dot ring paints, so marks stay legible */
   --line:rgba(255,255,255,.07);
   --line-strong:rgba(255,255,255,.12);
   --fg:#f4f4f6;          /* 18.3:1 on --bg */
@@ -61,6 +62,8 @@ main > *:nth-child(5){animation-delay:160ms}
 main > *:nth-child(6){animation-delay:200ms}
 main > *:nth-child(7){animation-delay:240ms}
 main > *:nth-child(8){animation-delay:280ms}
+main > *:nth-child(9){animation-delay:300ms}
+main > *:nth-child(n+10){animation-delay:320ms}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}}
 
 /* ── header ── */
@@ -406,6 +409,82 @@ footer p{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spac
   .install-btn:hover{background:rgba(255,171,46,.14)}
 }
 
+/* ── journal ──────────────────────────────────────────────────────── */
+textarea{
+  width:100%;padding:12px;border-radius:var(--r-ctl);background:rgba(0,0,0,.32);
+  border:1px solid var(--line);color:var(--fg);
+  font-family:var(--sans);font-size:13.5px;line-height:1.55;
+  resize:vertical;min-height:96px;
+  transition:border-color 180ms ease;
+}
+textarea::placeholder{color:var(--faint);opacity:1}
+textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
+#dumpState[data-tone="ok"]{color:var(--ok)}
+#dumpState[data-tone="bad"]{color:var(--danger)}
+#dumpState[data-tone="busy"]{color:var(--amber)}
+.btn-sub:disabled{opacity:.45;cursor:progress}
+
+/* ── month: stepper ── */
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{
+  width:26px;height:26px;display:grid;place-items:center;border-radius:8px;
+  border:1px solid var(--line);color:var(--muted);
+  transition:transform 140ms var(--ease-out),color 180ms ease;
+}
+.stepper button:active{transform:scale(.9);color:var(--fg)}
+.stepper .i{width:12px;height:12px}
+.stepper .flip{transform:rotate(180deg)}
+.month-name{
+  font-size:12px;color:var(--fg);font-weight:600;min-width:11ch;text-align:center;
+}
+
+/* ── KPI tiles: a handful of headline numbers is not a chart ── */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:6px}
+.tile{padding:12px 13px;border-radius:var(--r-ctl);background:rgba(255,255,255,.035);
+  border:1px solid var(--line)}
+.tile-l{font-size:10.5px;color:var(--faint);letter-spacing:.02em}
+/* Proportional figures: tabular only belongs in columns of numbers. */
+.tile-v{font-size:19px;font-weight:600;margin-top:5px;letter-spacing:-.02em}
+.tile-s{font-size:10px;color:var(--faint);margin-top:2px}
+
+/* ── figures ── */
+.fig{margin-top:20px}
+.fig figcaption{font-size:11.5px;color:var(--muted);margin-bottom:10px}
+.plot{position:relative}
+.plot svg{width:100%;display:block}
+#hoursPlot svg{height:132px}
+#wakePlot svg{height:96px}
+.plot .hit{cursor:crosshair}
+.axis{display:flex;justify-content:space-between;margin-top:5px}
+.axis span{font-family:var(--mono);font-size:9.5px;color:var(--faint);
+  font-variant-numeric:tabular-nums}
+.peak{font-size:10.5px;color:var(--faint);margin-top:7px}
+.tip{
+  position:absolute;top:-2px;left:0;right:0;text-align:center;
+  font-family:var(--mono);font-size:10.5px;color:var(--fg);
+  background:rgba(8,8,10,.9);border:1px solid var(--line-strong);
+  border-radius:8px;padding:5px 8px;pointer-events:none;
+}
+
+/* ── table view ── */
+.table-view{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+.table-view summary{display:flex;align-items:center;justify-content:space-between;
+  cursor:pointer;list-style:none}
+.table-view summary::-webkit-details-marker{display:none}
+.table-wrap{overflow-x:auto;margin-top:12px}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+caption{caption-side:top;text-align:left;font-size:10.5px;color:var(--faint);
+  padding-bottom:9px}
+th,td{padding:7px 8px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{font-size:10px;color:var(--faint);font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;border-bottom:1px solid var(--line)}
+tbody td{font-family:var(--mono);color:var(--muted);font-variant-numeric:tabular-nums;
+  border-bottom:1px solid rgba(255,255,255,.04)}
+tbody td:first-child{color:var(--fg)}
+.late{font-family:var(--sans);font-size:9px;color:var(--amber);
+  border:1px solid rgba(255,171,46,.3);border-radius:4px;padding:1px 4px}
+
 /* ── responsive ───────────────────────────────────────────────────────
    Verified at 320 / 360 / 412 / 768. The 19-column day grid is fraction
    based, so it scales instead of wrapping. */
@@ -423,6 +502,12 @@ footer p{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spac
   .le-ms{width:66px}
   h1{font-size:11px;letter-spacing:.2em}
   .grid{gap:2.5px}
+  .tiles{gap:7px}
+  .tile{padding:10px 11px}
+  .tile-v{font-size:17px}
+  .month-name{font-size:11px;min-width:9ch}
+  #hoursPlot svg{height:112px}
+  #wakePlot svg{height:84px}
 }
 @media (min-width:560px){
   main{padding:28px 20px 40px}

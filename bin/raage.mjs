@@ -1,0 +1,364 @@
+#!/usr/bin/env node
+/* ══════════════════════════════════════════════════════════════════════
+   raage — the one command any coding agent calls to record a day.
+
+     node bin/raage.mjs save "whatever I rambled, verbatim"
+
+   Contract, in order of importance:
+
+   1. THE RAW TEXT IS NEVER TOUCHED. It is written byte-for-byte to its own
+      .txt file. Not reflowed, not summarised, not corrected, not
+      re-punctuated. Every derived file can be regenerated from it; it can
+      be regenerated from nothing.
+   2. APPEND ONLY. An entry file, once written, is never edited or deleted.
+      A correction is a new entry.
+   3. THREE COPIES, EVERY TIME. The repo, GitHub, and phone storage.
+   4. DERIVED FILES ARE DISPOSABLE. days.json and the per-day markdown are
+      rebuilt from the entries by `rebuild`. If they ever disagree with the
+      entries, the entries win.
+
+   Deliberately NOT connected to ledger/ledger.json. That ledger is
+   measured, hash-chained, capped and clock-authoritative. Numbers a human
+   said out loud are self-reported. Mixing them would make the measured
+   total meaningless, so the site shows the two separately.
+   ══════════════════════════════════════════════════════════════════════ */
+
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT     = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const JOURNAL  = path.join(ROOT, 'journal');
+const ENTRIES  = path.join(JOURNAL, 'entries');
+const DAYS     = path.join(JOURNAL, 'days');
+const DAYS_JSON = path.join(JOURNAL, 'days.json');
+const MANIFEST = path.join(JOURNAL, 'MANIFEST.txt');
+
+/* Phone mirrors. Absent off-device, which is not an error. */
+const PHONE_MIRROR = '/sdcard/Raage_SriVarshan';
+const PHONE_SNAPS  = '/sdcard/Backups';
+
+const TZ = 'Asia/Kolkata';
+const sha = s => createHash('sha256').update(s).digest('hex');
+const ok   = m => console.log(`  ${m}`);
+const die  = m => { console.error(`raage: ${m}`); process.exit(1); };
+
+/* ── local (IST) date helpers ───────────────────────────────────────── */
+const parts = (d = new Date()) => {
+  const f = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false,
+  }).formatToParts(d).reduce((a,p) => (a[p.type] = p.value, a), {});
+  return f;
+};
+const today = () => { const p = parts(); return `${p.year}-${p.month}-${p.day}`; };
+const nowHM = () => { const p = parts(); return `${p.hour}:${p.minute}`; };
+const shiftDay = (day, n) => {
+  const d = new Date(`${day}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0,10);
+};
+const daysBetween = (a, b) =>
+  Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 864e5);
+
+/* ── duration parsing: "6h30m" | "6h" | "90m" | "6.5h" | "390" ─────── */
+function toMinutes(v){
+  if (v == null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.round(+s);              // bare = minutes
+  let m = 0, found = false;
+  const h = s.match(/(\d+(?:\.\d+)?)\s*h/);   if (h){ m += +h[1] * 60; found = true; }
+  const mm = s.match(/(\d+(?:\.\d+)?)\s*m/);  if (mm){ m += +mm[1];    found = true; }
+  if (!found) return null;
+  return Math.round(m);
+}
+const hhmm = v => {
+  if (!v) return null;
+  const m = String(v).trim().match(/^(\d{1,2}):?(\d{2})$/);
+  if (!m) return null;
+  const h = +m[1], mi = +m[2];
+  if (h > 23 || mi > 59) return null;
+  return `${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;
+};
+const num = (v, lo, hi) => {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : null;
+};
+
+/* ── argv ───────────────────────────────────────────────────────────── */
+function parseArgs(argv){
+  const flags = {}, rest = [];
+  for (let i = 0; i < argv.length; i++){
+    const a = argv[i];
+    if (a.startsWith('--')){
+      const [k, inline] = a.slice(2).split('=');
+      if (inline !== undefined) flags[k] = inline;
+      else if (argv[i+1] && !argv[i+1].startsWith('--')) flags[k] = argv[++i];
+      else flags[k] = true;
+    } else rest.push(a);
+  }
+  return { flags, rest };
+}
+const readStdin = () => {
+  try { return fs.readFileSync(0, 'utf8'); } catch { return ''; }
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+   log — write one verbatim entry
+   ══════════════════════════════════════════════════════════════════════ */
+function cmdLog(flags, rest){
+  let raw = flags.file ? fs.readFileSync(flags.file, 'utf8')
+          : rest.length ? rest.join(' ')
+          : readStdin();
+  if (!raw || !raw.trim()) die('nothing to log. Pass text, --file <path>, or pipe stdin.');
+
+  // The ONLY normalisation: strip a trailing newline the shell added, and
+  // normalise CRLF so the file is not full of ^M. Nothing else is touched.
+  raw = raw.replace(/\r\n/g, '\n').replace(/\n+$/, '\n');
+
+  const day = flags.date ? (hhmmDate(flags.date) || die(`bad --date "${flags.date}", use YYYY-MM-DD`))
+                         : today();
+  const gap = daysBetween(day, today());
+  if (gap < 0) die(`${day} is in the future.`);
+  // Backfilling further than yesterday is allowed (a journal you cannot
+  // backfill gets abandoned) but is recorded as late so charts stay honest.
+  const late = gap > 1;
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace(/-\d{3}Z$/, 'Z');
+  fs.mkdirSync(ENTRIES, { recursive: true });
+
+  // Ids carry seconds, so two dumps in the same second would collide. Suffix
+  // instead of refusing: an existing entry is never overwritten, and a new
+  // one is never dropped.
+  // The suffix goes AFTER the Z and is zero padded so ids still sort
+  // chronologically as plain strings; rebuild() relies on that order to
+  // decide which entry's value is the later one.
+  const base = `${day}T${stamp.slice(11)}`;
+  let id = base, n = 1;
+  while (fs.existsSync(path.join(ENTRIES, `${id}.txt`)))
+    id = `${base}-${String(++n).padStart(2,'0')}`;
+
+  fs.writeFileSync(path.join(ENTRIES, `${id}.txt`), raw);   // verbatim, byte for byte
+
+  const meta = {
+    id, day, at: new Date().toISOString(), localTime: nowHM(), tz: TZ,
+    late: late || undefined,
+    agent: flags.agent || process.env.RAAGE_AGENT || 'unknown',
+    words: raw.trim().split(/\s+/).length,
+    bytes: Buffer.byteLength(raw),
+    sha256: sha(raw),
+    // Everything below is the agent's reading of the text. The text itself
+    // is the record; these exist only so the site can draw a chart.
+    reported: {
+      workedMin: toMinutes(flags.worked),
+      sleptMin:  toMinutes(flags.slept),
+      woke:      hhmm(flags.woke),
+      sleptAt:   hhmm(flags['slept-at'] ?? flags.sleptAt),
+      mood:      num(flags.mood, 1, 10),
+      energy:    num(flags.energy, 1, 10),
+      tags: flags.tags ? String(flags.tags).split(',').map(t => t.trim()).filter(Boolean) : [],
+    },
+  };
+  for (const k of Object.keys(meta.reported))
+    if (meta.reported[k] == null) delete meta.reported[k];
+
+  fs.writeFileSync(path.join(ENTRIES, `${id}.json`), JSON.stringify(meta, null, 2) + '\n');
+  fs.appendFileSync(MANIFEST, `${meta.sha256}  ${id}.txt  ${meta.bytes}\n`);
+
+  ok(`entry ${id}  ${meta.words} words  ${meta.bytes} bytes`);
+  if (late) ok(`marked late: ${gap} days after the fact`);
+  const r = meta.reported;
+  if (Object.keys(r).length)
+    ok('read as: ' + Object.entries(r).map(([k,v]) => `${k}=${Array.isArray(v)?v.join('/'):v}`).join('  '));
+  return meta;
+}
+const hhmmDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? String(d) : null;
+
+/* ══════════════════════════════════════════════════════════════════════
+   rebuild — regenerate every derived file from the entries
+   ══════════════════════════════════════════════════════════════════════ */
+function cmdRebuild(){
+  if (!fs.existsSync(ENTRIES)){ ok('no entries yet'); return { days: [] }; }
+  const metas = fs.readdirSync(ENTRIES).filter(f => f.endsWith('.json'))
+    .map(f => JSON.parse(fs.readFileSync(path.join(ENTRIES, f), 'utf8')))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  const byDay = new Map();
+  for (const m of metas){
+    if (!byDay.has(m.day)) byDay.set(m.day, []);
+    byDay.get(m.day).push(m);
+  }
+
+  fs.mkdirSync(DAYS, { recursive: true });
+  const days = [];
+  for (const [day, list] of [...byDay].sort((a,b) => a[0].localeCompare(b[0]))){
+    // Later entries win for a scalar; totals add up; tags union.
+    const last = k => [...list].reverse().map(m => m.reported?.[k]).find(v => v != null) ?? null;
+    const sum  = k => { const v = list.map(m => m.reported?.[k]).filter(n => n != null);
+                        return v.length ? v.reduce((a,b) => a+b, 0) : null; };
+    const rec = {
+      day,
+      entries: list.length,
+      words: list.reduce((a,m) => a + m.words, 0),
+      workedMin: sum('workedMin'),
+      sleptMin:  last('sleptMin'),
+      woke:      last('woke'),
+      sleptAt:   last('sleptAt'),
+      mood:      last('mood'),
+      energy:    last('energy'),
+      tags: [...new Set(list.flatMap(m => m.reported?.tags || []))],
+      late: list.some(m => m.late) || undefined,
+      ids: list.map(m => m.id),
+    };
+    for (const k of Object.keys(rec)) if (rec[k] == null) delete rec[k];
+    days.push(rec);
+
+    // A readable per-day page for GitHub. Derived, so it is safe to rewrite.
+    const body = list.map(m => {
+      const raw = fs.readFileSync(path.join(ENTRIES, `${m.id}.txt`), 'utf8');
+      const r = Object.entries(m.reported || {})
+        .map(([k,v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' · ');
+      return `## ${m.localTime}\n\n${r ? `> ${r}\n\n` : ''}${raw.trimEnd()}\n`;
+    }).join('\n---\n\n');
+    fs.writeFileSync(path.join(DAYS, `${day}.md`),
+      `# ${day}\n\n_${rec.entries} ${rec.entries === 1 ? 'entry' : 'entries'}, ` +
+      `${rec.words} words. Verbatim; the files in ../entries/ are the record._\n\n${body}`);
+  }
+
+  const out = {
+    generated: new Date().toISOString(),
+    note: 'DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. ' +
+          'Self-reported numbers, not the measured ledger.',
+    totalEntries: metas.length,
+    totalWords: days.reduce((a,d) => a + d.words, 0),
+    days,
+  };
+  fs.writeFileSync(DAYS_JSON, JSON.stringify(out, null, 1) + '\n');
+  ok(`rebuilt ${days.length} ${days.length === 1 ? 'day' : 'days'} from ${metas.length} ` +
+     `${metas.length === 1 ? 'entry' : 'entries'}`);
+  return out;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   verify — every entry still matches the hash recorded when it was written
+   ══════════════════════════════════════════════════════════════════════ */
+function cmdVerify(){
+  if (!fs.existsSync(MANIFEST)){ ok('no manifest yet'); return true; }
+  const lines = fs.readFileSync(MANIFEST, 'utf8').split('\n').filter(Boolean);
+  let bad = 0, missing = 0;
+  for (const line of lines){
+    const [hash, name] = line.split(/\s+/);
+    const p = path.join(ENTRIES, name);
+    if (!fs.existsSync(p)){ console.error(`  LOST     ${name}`); missing++; continue; }
+    if (sha(fs.readFileSync(p, 'utf8')) !== hash){ console.error(`  CHANGED  ${name}`); bad++; }
+  }
+  const good = lines.length - bad - missing;
+  ok(`${good}/${lines.length} entries verbatim` + (bad||missing ? `  ${bad} changed, ${missing} lost` : ''));
+  return !bad && !missing;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   backup — phone mirror plus a dated snapshot
+   ══════════════════════════════════════════════════════════════════════ */
+function cmdBackup(){
+  if (!fs.existsSync('/sdcard')){ ok('no /sdcard here, skipping the phone mirror'); return false; }
+  let copied = 0;
+  const mirror = path.join(PHONE_MIRROR, 'journal');
+  fs.mkdirSync(path.join(mirror, 'entries'), { recursive: true });
+  fs.mkdirSync(path.join(mirror, 'days'), { recursive: true });
+  const copyDir = (from, to) => {
+    if (!fs.existsSync(from)) return;
+    for (const f of fs.readdirSync(from)){
+      const src = path.join(from, f), dst = path.join(to, f);
+      // Entries are immutable, so an existing identical copy is skipped.
+      if (fs.existsSync(dst) && fs.statSync(dst).size === fs.statSync(src).size) continue;
+      fs.copyFileSync(src, dst); copied++;
+    }
+  };
+  copyDir(ENTRIES, path.join(mirror, 'entries'));
+  copyDir(DAYS, path.join(mirror, 'days'));
+  for (const f of [DAYS_JSON, MANIFEST])
+    if (fs.existsSync(f)) { fs.copyFileSync(f, path.join(mirror, path.basename(f))); copied++; }
+  ok(`mirrored ${copied} files to ${mirror}`);
+
+  try {
+    fs.mkdirSync(PHONE_SNAPS, { recursive: true });
+    const snap = path.join(PHONE_SNAPS, `raage-journal-${today()}.tar.gz`);
+    execFileSync('tar', ['-czf', snap, '-C', ROOT, 'journal'], { stdio: 'pipe' });
+    ok(`snapshot ${snap} (${(fs.statSync(snap).size/1024).toFixed(1)} KB)`);
+  } catch(e){ ok(`snapshot skipped: ${String(e.message).split('\n')[0]}`); }
+  return true;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   push — commit and push, so the agent never has to know git
+   ══════════════════════════════════════════════════════════════════════ */
+function cmdPush(msg){
+  const git = (...a) => execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim();
+  try {
+    git('add', 'journal');
+    if (!git('status', '--porcelain', '--', 'journal')){ ok('nothing new to push'); return true; }
+    git('-c', 'user.email=thebeliverone@gmail.com', '-c', 'user.name=varsansri',
+        'commit', '-q', '-m', msg || `journal: ${today()}`);
+    git('push', '-q', 'origin', 'HEAD');
+    ok(`pushed ${git('rev-parse', '--short', 'HEAD')}`);
+    return true;
+  } catch(e){
+    console.error(`  push failed: ${String(e.stderr || e.message).split('\n')[0]}`);
+    return false;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   show
+   ══════════════════════════════════════════════════════════════════════ */
+function cmdShow(day = today()){
+  const f = path.join(DAYS, `${day}.md`);
+  if (!fs.existsSync(f)) return ok(`nothing recorded for ${day}`);
+  console.log(fs.readFileSync(f, 'utf8'));
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   main
+   ══════════════════════════════════════════════════════════════════════ */
+const HELP = `raage — record a day, verbatim.
+
+  save  "<text>" [flags]   log + rebuild + backup + push      <- use this one
+  log   "<text>" [flags]   write the entry only
+  rebuild                  regenerate days.json and journal/days/ from entries
+  verify                   confirm every entry still matches its hash
+  backup                   mirror to phone storage + dated snapshot
+  push  [message]          commit and push the journal
+  show  [YYYY-MM-DD]       print a day
+
+Text comes from the argument, --file <path>, or stdin.
+
+Flags, all optional. These are YOUR reading of the text, for the charts.
+The text itself is stored untouched either way.
+  --worked 6h30m   --slept 7h30m   --woke 06:10   --slept-at 23:40
+  --mood 7         --energy 5      --tags deep-work,gym
+  --date YYYY-MM-DD   (defaults to today; older than yesterday is marked late)
+  --agent claude-code|opencode|codex
+`;
+
+const [cmd, ...argv] = process.argv.slice(2);
+const { flags, rest } = parseArgs(argv);
+
+switch (cmd){
+  case 'save': {
+    cmdLog(flags, rest);
+    const d = cmdRebuild();
+    cmdBackup();
+    cmdPush(`journal: ${today()} · ${d.totalEntries} entries · ${d.totalWords} words`);
+    break;
+  }
+  case 'log':     cmdLog(flags, rest); cmdRebuild(); break;
+  case 'rebuild': cmdRebuild(); break;
+  case 'verify':  process.exit(cmdVerify() ? 0 : 1);
+  case 'backup':  cmdBackup(); break;
+  case 'push':    cmdPush(rest.join(' ')); break;
+  case 'show':    cmdShow(rest[0]); break;
+  default:        console.log(HELP);
+}

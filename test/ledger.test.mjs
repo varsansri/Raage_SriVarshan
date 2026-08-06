@@ -25,7 +25,9 @@ const mkEl = () => {
     hidden:false, id:'',
     appendChild(c){ this.children.push(c); return c },
     replaceChildren(){ this.children = [] },
-    querySelector(){ return null }, querySelectorAll(){ return [] },
+    clientWidth:360,
+    querySelector(sel){ return sel === '.missing' ? null : mkEl() },
+    querySelectorAll(){ return [] },
     setAttribute(k,v){ this[k] = v }, getAttribute(k){ return this[k] },
     closest(){ return this }, addEventListener(){}, click(){},
   };

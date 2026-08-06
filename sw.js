@@ -1,6 +1,6 @@
 /* Cache the shell so the countdown survives offline.
    Network-first for app files so deploys land immediately. */
-const CACHE = 'raage-v3';
+const CACHE = 'raage-v4';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js',
                'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
@@ -17,6 +17,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;  // never touch api.github.com
+  // The journal is read fresh with a cachebust query on every load. Caching it
+  // would both serve stale charts and grow the cache without bound.
+  if (url.pathname.includes('/journal/')) return;
   e.respondWith(
     fetch(e.request)
       .then(r => { caches.open(CACHE).then(c => c.put(e.request, r.clone())); return r; })

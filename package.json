@@ -1,0 +1,12 @@
+{
+  "name": "raage-srivarshan",
+  "private": true,
+  "type": "module",
+  "description": "Countdown to 13 July 2027, a measured work ledger, and a verbatim journal.",
+  "scripts": {
+    "test": "node test/ledger.test.mjs && node test/journal.test.mjs",
+    "save": "node bin/raage.mjs save",
+    "rebuild": "node bin/raage.mjs rebuild",
+    "verify": "node bin/raage.mjs verify && node test/ledger.test.mjs"
+  }
+}

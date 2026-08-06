@@ -1,0 +1,97 @@
+# Recording the journal
+
+This repo is varsansri's daily record until 13 July 2027. When they give you a
+brain dump — what they did, when they woke, how they slept, how they felt, what
+they are worried about — your job is to **store it, not to improve it**.
+
+## The one command
+
+```sh
+node bin/raage.mjs save "<paste their text here, exactly as they said it>"
+```
+
+`save` writes the entry, rebuilds the derived files, mirrors to phone storage,
+and pushes to GitHub. That is the whole job. Nothing else is required.
+
+For a long dump, avoid shell quoting problems by using a file or stdin:
+
+```sh
+node bin/raage.mjs save --file /tmp/dump.txt
+cat /tmp/dump.txt | node bin/raage.mjs save
+```
+
+## Rules, in order
+
+1. **Never edit their words.** Do not summarise, tidy, fix spelling, fix
+   grammar, reflow, translate, remove repetition, or "clean up" rambling. Typos
+   and half-finished sentences are data. The text goes in byte for byte, and
+   `verify` will catch it if it ever changes.
+2. **Never put your own writing in an entry.** No preamble, no "Summary:", no
+   bullet points you invented. If you want to add your reading of it, that is
+   what the flags below are for.
+3. **One dump, one entry.** Do not merge several days into one entry. Do not
+   split one dump into several.
+4. **Never edit or delete an existing entry.** A correction is a new entry.
+5. **Never touch `ledger/`.** That is the measured, hash-chained work ledger
+   with its own rules. The journal is self-reported and stays separate.
+6. **Never hand-edit `journal/days.json` or `journal/days/`.** They are derived.
+   Run `node bin/raage.mjs rebuild`.
+
+## Flags: your reading of the text
+
+All optional. Fill in only what they actually said. Do not guess, do not invent
+a number to make a chart look complete. A missing value is correct; a made-up
+value is corruption.
+
+| Flag | Example | Meaning |
+|---|---|---|
+| `--worked` | `6h30m`, `90m`, `6.5h` | time they said they worked |
+| `--slept` | `7h`, `410m` | how long they slept |
+| `--woke` | `06:10` | when they got up |
+| `--slept-at` | `23:40` | when they went to bed |
+| `--mood` | `7` | 1-10, only if they indicated it |
+| `--energy` | `5` | 1-10, only if they indicated it |
+| `--tags` | `deep-work,gym,admin` | short lowercase kebab tags |
+| `--date` | `2026-08-05` | defaults to today; older than yesterday is stored but marked `late` |
+| `--agent` | `claude-code` | which agent you are |
+
+Example:
+
+```sh
+node bin/raage.mjs save "woke 6ish, groggy. 3 hours on the ledger bug then gym.
+worried this journal becomes a chore." \
+  --worked 3h --woke 06:10 --slept 6h40m --mood 6 --tags deep-work,gym \
+  --agent claude-code
+```
+
+If they mention working time, still record it here — but understand it does not
+change the measured total on the site. Those are separate on purpose.
+
+## Where it goes
+
+```
+journal/entries/2026-08-06T07-05-06Z.txt    the record. verbatim. immutable.
+journal/entries/2026-08-06T07-05-06Z.json   when, which agent, sha256, your flags
+journal/MANIFEST.txt                        append-only hash log
+journal/days/2026-08-06.md                  derived, readable on GitHub
+journal/days.json                           derived, what the site charts
+```
+
+Three copies of everything: this repo, GitHub, and `/sdcard/Raage_SriVarshan/`
+plus a dated `.tar.gz` in `/sdcard/Backups/`.
+
+## Other commands
+
+```sh
+node bin/raage.mjs show            # what is recorded today
+node bin/raage.mjs show 2026-08-05
+node bin/raage.mjs verify          # every entry still matches its hash
+node bin/raage.mjs rebuild         # regenerate the derived files
+node bin/raage.mjs backup          # phone mirror + snapshot
+```
+
+## If something looks wrong
+
+`verify` exits non-zero when an entry's bytes no longer match the hash recorded
+when it was written. That means something edited history. Do not "fix" it by
+rewriting the file. Report it.

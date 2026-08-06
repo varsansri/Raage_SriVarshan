@@ -572,6 +572,314 @@ document.addEventListener('visibilitychange', async () => {
 window.addEventListener('beforeunload', () => { if (session) accrue(); });
 
 
+
+/* ══════════ journal ══════════════════════════════════════════════════
+   The CLI (bin/raage.mjs) is the main way in; this is the paste-a-dump
+   path. Both write the same shape, and both store the text byte for byte.
+
+   Timestamps come from Time.now(), which is GitHub's clock, so the
+   recorded moment is not whatever the phone thinks it is.             */
+
+let journal = null;                     // parsed journal/days.json
+let monthCursor = null;                 // {y, m} being viewed
+
+/* The ONE normalisation the CLI also applies, so a dump saved here and a
+   dump saved from the terminal are byte-identical. Nothing else changes. */
+const normaliseDump = t => t.replace(/\r\n/g, '\n').replace(/\n+$/, '\n');
+
+const istParts = ms => {
+  const f = new Intl.DateTimeFormat('en-CA', {
+    timeZone:'Asia/Kolkata', year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false,
+  }).formatToParts(new Date(ms)).reduce((a,x) => (a[x.type] = x.value, a), {});
+  return f;
+};
+const istDay  = ms => { const p = istParts(ms); return `${p.year}-${p.month}-${p.day}`; };
+const istTime = ms => { const p = istParts(ms); return `${p.hour}:${p.minute}`; };
+
+async function saveDump(){
+  const el = $('dump');
+  const raw = normaliseDump(el.value);
+  if (!raw.trim()) return toast('paste something first');
+  if (!gh()) return toast('add your repo and token in settings');
+  if (!Time.synced && !confirm('Clock unverified (offline). Save anyway?')) return;
+
+  const btn = $('saveDump');
+  btn.disabled = true;
+  setDumpState('saving to GitHub', 'busy');
+  try {
+    const now = Time.now();
+    const iso = new Date(now).toISOString();
+    const day = istDay(now);
+    const id  = `${day}T${iso.slice(11,19).replace(/:/g,'-')}Z`;
+    const meta = {
+      id, day, at: iso, localTime: istTime(now), tz: 'Asia/Kolkata',
+      agent: 'site',
+      words: raw.trim().split(/\s+/).length,
+      bytes: new TextEncoder().encode(raw).length,
+      sha256: await sha256(raw),
+      reported: {},
+    };
+
+    await ghPut(`journal/entries/${id}.txt`, raw,
+                `journal: entry ${id} (${meta.words} words)`);
+    await ghPut(`journal/entries/${id}.json`, JSON.stringify(meta, null, 2) + '\n',
+                `journal: meta ${id}`);
+    await appendManifest(meta);
+    await mergeDay(meta);
+
+    el.value = '';
+    await loadJournal();
+    renderMonth();
+    setDumpState(`saved ${day} at ${meta.localTime} IST · ${meta.words} words`, 'ok');
+    toast(`saved at ${meta.localTime}`);
+  } catch(e){
+    setDumpState(`save failed: ${e.message}`, 'bad');
+    toast('save failed, nothing was lost');
+  } finally { btn.disabled = false; }
+}
+
+const setDumpState = (t, tone = '') => {
+  const el = $('dumpState'); el.textContent = t; el.dataset.tone = tone;
+};
+
+/* Create-or-update one file. Fetches the sha only when the file exists. */
+async function ghPut(path, content, message){
+  let sha = null;
+  const head = await ghFetch(path);
+  if (head.ok) sha = (await head.json()).sha;
+  const r = await ghFetch(path, {
+    method:'PUT',
+    body: JSON.stringify({ message, content: b64(content), ...(sha ? { sha } : {}) }),
+  });
+  if (!r.ok) throw new Error(`${path}: ${r.status}`);
+  return r.json();
+}
+
+async function appendManifest(meta){
+  const line = `${meta.sha256}  ${meta.id}.txt  ${meta.bytes}\n`;
+  const r = await ghFetch('journal/MANIFEST.txt');
+  const prev = r.ok ? unb64((await r.json()).content) : '';
+  await ghPut('journal/MANIFEST.txt', prev + line, `journal: manifest ${meta.id}`);
+}
+
+/* Optimistic update so the chart moves immediately. `raage rebuild` is the
+   authority and will correct anything this gets wrong. */
+async function mergeDay(meta){
+  const r = await ghFetch('journal/days.json');
+  const data = r.ok ? JSON.parse(unb64((await r.json()).content))
+                    : { days: [], totalEntries: 0, totalWords: 0 };
+  const days = data.days || [];
+  let rec = days.find(d => d.day === meta.day);
+  if (!rec){ rec = { day: meta.day, entries: 0, words: 0, tags: [], ids: [] }; days.push(rec); }
+  rec.entries += 1;
+  rec.words   += meta.words;
+  rec.ids = [...(rec.ids || []), meta.id];
+  days.sort((a,b) => a.day.localeCompare(b.day));
+  data.days = days;
+  data.totalEntries = days.reduce((a,d) => a + d.entries, 0);
+  data.totalWords   = days.reduce((a,d) => a + d.words, 0);
+  data.generated = meta.at;
+  await ghPut('journal/days.json', JSON.stringify(data, null, 1) + '\n',
+              `journal: days.json ${meta.day}`);
+}
+
+/* Same-origin, because GitHub Pages serves this repo. No token needed to read. */
+async function loadJournal(){
+  try {
+    const r = await fetch(`./journal/days.json?t=${Date.now()}`, { cache:'no-store' });
+    if (!r.ok) throw new Error(String(r.status));
+    journal = await r.json();
+  } catch { journal = null; }
+  const n = journal?.totalEntries || 0;
+  $('journalStat').textContent = n
+    ? `${n} ${n === 1 ? 'entry' : 'entries'} · ${nf.format(journal.totalWords || 0)} words`
+    : 'nothing recorded yet';
+}
+
+/* ══════════ the month ════════════════════════════════════════════════
+   Two single-series charts rather than one dual-axis chart: hours and
+   clock-times have unrelated scales, and putting them on one plot would
+   invent a relationship. Hours get the accent because they are the point;
+   wake times get the de-emphasis grey because they are context.       */
+
+const MONTHS = ['January','February','March','April','May','June','July',
+                'August','September','October','November','December'];
+
+const monthDays = (y, m) => {
+  const out = [], last = new Date(y, m + 1, 0).getDate();
+  for (let d = 1; d <= last; d++)
+    out.push(`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
+  return out;
+};
+const wakeToMin = t => {
+  const m = /^(\d{2}):(\d{2})$/.exec(t || '');
+  return m ? +m[1] * 60 + +m[2] : null;
+};
+
+function renderMonth(){
+  if (!monthCursor){ const p = istParts(Time.now()); monthCursor = { y:+p.year, m:+p.month - 1 }; }
+  const { y, m } = monthCursor;
+  $('monthName').textContent = `${MONTHS[m]} ${y}`;
+
+  const recs = new Map((journal?.days || []).map(d => [d.day, d]));
+  const keys = monthDays(y, m);
+  const rows = keys.map(k => ({ day:k, n:+k.slice(8), r: recs.get(k) || null }));
+
+  const worked = rows.map(x => ({ ...x, v: x.r?.workedMin ?? null }));
+  const woke   = rows.map(x => ({ ...x, v: wakeToMin(x.r?.woke) }));
+  const logged = rows.filter(x => x.r);
+
+  // KPI row. A handful of headline numbers is a tile row, not a chart.
+  const workedVals = worked.filter(x => x.v != null).map(x => x.v);
+  const sleptVals  = rows.map(x => x.r?.sleptMin).filter(v => v != null);
+  const wokeVals   = woke.filter(x => x.v != null).map(x => x.v);
+  const avg = a => a.length ? a.reduce((p,c) => p+c, 0) / a.length : null;
+  $('tiles').innerHTML = [
+    tile('Days recorded', `${logged.length}`, `of ${rows.length}`),
+    tile('Hours reported', workedVals.length ? hm(workedVals.reduce((a,b)=>a+b,0)*60e3) : 'none', 'this month'),
+    tile('Average sleep',  sleptVals.length ? hm(avg(sleptVals)*60e3) : 'none', 'per recorded night'),
+    tile('Usual wake-up',  wokeVals.length ? minToClock(avg(wokeVals)) : 'none', 'average'),
+  ].join('');
+
+  drawColumns($('hoursPlot'), worked, {
+    unit:'h', toLabel: v => hm(v*60e3), max: Math.max(60, ...workedVals),
+    accent:true,
+  });
+  drawDots($('wakePlot'), woke, {
+    toLabel: minToClock,
+    lo: wokeVals.length ? Math.max(0, Math.min(...wokeVals) - 45) : 240,
+    hi: wokeVals.length ? Math.min(1440, Math.max(...wokeVals) + 45) : 660,
+  });
+
+  $('monthNote').textContent = logged.length
+    ? 'Self-reported, from what you dictated. Separate from the measured ledger above.'
+    : 'Nothing recorded for this month yet. Send a dump through your agent or paste one above.';
+
+  drawTable(rows);
+}
+
+const tile = (label, value, sub) =>
+  `<div class="tile"><p class="tile-l">${label}</p><p class="tile-v">${value}</p>
+   <p class="tile-s">${sub}</p></div>`;
+
+const minToClock = v => {
+  const t = Math.round(v);
+  return `${String(Math.floor(t/60) % 24).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
+};
+
+/* ── column chart ──────────────────────────────────────────────────────
+   Mark spec: bar capped at 24px, 4px rounded top, square at the baseline,
+   a 2px surface gap between neighbours, hairline recessive baseline, and
+   only the largest value directly labelled. */
+function drawColumns(host, rows, o){
+  const W = 100, H = 40, base = H - 6, top = 5;
+  const n = rows.length, band = W / n, gap = Math.min(2 * (W/host.clientWidth || 0.6), band * 0.35);
+  const bw = Math.max(0.8, band - gap);
+  const scale = v => (v / o.max) * (base - top);
+  const peak = rows.reduce((a,b) => (b.v ?? -1) > (a?.v ?? -1) ? b : a, null);
+
+  let marks = '', hits = '';
+  rows.forEach((x, i) => {
+    const cx = i * band + band / 2;
+    if (x.v != null && x.v > 0){
+      const h = Math.max(1.2, scale(x.v));
+      // 4px-equivalent rounded top, square bottom
+      const r = Math.min(bw / 2, 1.4);
+      marks += `<path d="M${cx-bw/2} ${base} v${-(h-r)} a${r} ${r} 0 0 1 ${bw} 0 v${h-r} z"
+        fill="var(--amber)"/>`;
+    } else if (x.v === 0){
+      marks += `<rect x="${cx-bw/2}" y="${base-0.8}" width="${bw}" height="0.8"
+        fill="rgba(255,255,255,.14)"/>`;
+    }
+    hits += `<rect class="hit" x="${i*band}" y="${top-3}" width="${band}" height="${base-top+6}"
+      fill="transparent" data-t="${x.day} · ${x.v == null ? 'not recorded' : o.toLabel(x.v)}"/>`;
+  });
+
+  const ticks = [o.max, o.max/2].map(v =>
+    `<line x1="0" y1="${base-scale(v)}" x2="${W}" y2="${base-scale(v)}"
+       stroke="rgba(255,255,255,.07)" stroke-width=".25"/>`).join('');
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+      role="img" aria-label="Hours reported per day">
+    ${ticks}
+    <line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="rgba(255,255,255,.12)" stroke-width=".25"/>
+    ${marks}${hits}
+  </svg>
+  <div class="axis"><span>${rows[0].n}</span><span>${rows[rows.length-1].n}</span></div>
+  ${peak?.v ? `<p class="peak">busiest: ${peak.day.slice(5)} at ${o.toLabel(peak.v)}</p>` : ''}
+  <p class="tip" hidden></p>`;
+  wireTips(host);
+}
+
+/* ── dot plot ──────────────────────────────────────────────────────────
+   Markers >= 8px with a 2px surface ring so overlapping days stay legible. */
+function drawDots(host, rows, o){
+  const W = 100, H = 30, top = 4, base = H - 6;
+  const span = Math.max(30, o.hi - o.lo);
+  const y = v => top + ((v - o.lo) / span) * (base - top);
+  const n = rows.length, band = W / n;
+
+  let marks = '', hits = '';
+  rows.forEach((x, i) => {
+    const cx = i * band + band / 2;
+    if (x.v != null)
+      marks += `<circle cx="${cx}" cy="${y(x.v)}" r="1.5"
+        fill="var(--muted)" stroke="var(--surface-ring)" stroke-width=".7"/>`;
+    hits += `<rect class="hit" x="${i*band}" y="0" width="${band}" height="${H}"
+      fill="transparent" data-t="${x.day} · ${x.v == null ? 'not recorded' : o.toLabel(x.v)}"/>`;
+  });
+  const guides = [o.lo, (o.lo+o.hi)/2, o.hi].map(v =>
+    `<line x1="0" y1="${y(v)}" x2="${W}" y2="${y(v)}"
+      stroke="rgba(255,255,255,.06)" stroke-width=".25"/>`).join('');
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+      role="img" aria-label="Time you got up, per day">${guides}${marks}${hits}</svg>
+    <div class="axis"><span>${minToClock(o.lo)}</span><span>${minToClock(o.hi)}</span></div>
+    <p class="tip" hidden></p>`;
+  wireTips(host);
+}
+
+/* Tap or hover a band to read its value. Hit targets span the whole band,
+   which is far bigger than the mark. */
+function wireTips(host){
+  const tip = host.querySelector('.tip'), svg = host.querySelector('svg');
+  if (!tip || !svg) return;          // never let a chart take the card down
+  const show = e => {
+    const t = e.target.dataset?.t; if (!t) return;
+    tip.textContent = t; tip.hidden = false;
+  };
+  svg.addEventListener('pointerdown', show);
+  svg.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') show(e); });
+  svg.addEventListener('pointerleave', () => { tip.hidden = true; });
+}
+
+/* The table is the accessible route to every value the charts only hint at. */
+function drawTable(rows){
+  const have = rows.filter(x => x.r);
+  $('monthTable').innerHTML = !have.length
+    ? '<caption>No entries this month.</caption>'
+    : `<caption>Self-reported, one row per recorded day</caption>
+       <thead><tr><th>Day</th><th>Worked</th><th>Slept</th><th>Up</th><th>Words</th></tr></thead>
+       <tbody>${have.map(x => `<tr>
+         <td>${x.r.day.slice(5)}${x.r.late ? ' <span class="late">late</span>' : ''}</td>
+         <td>${x.r.workedMin != null ? hm(x.r.workedMin*60e3) : '-'}</td>
+         <td>${x.r.sleptMin  != null ? hm(x.r.sleptMin*60e3)  : '-'}</td>
+         <td>${x.r.woke || '-'}</td>
+         <td>${nf.format(x.r.words || 0)}</td>
+       </tr>`).join('')}</tbody>`;
+}
+
+$('saveDump').onclick = saveDump;
+$('monthPrev').onclick = () => {
+  monthCursor.m--; if (monthCursor.m < 0){ monthCursor.m = 11; monthCursor.y--; }
+  renderMonth();
+};
+$('monthNext').onclick = () => {
+  monthCursor.m++; if (monthCursor.m > 11){ monthCursor.m = 0; monthCursor.y++; }
+  renderMonth();
+};
+
 /* ══════════ install prompt ══════════
    Chrome fires beforeinstallprompt only when the install criteria are met, so
    the strip is rendered from that event and is never a dead button. iOS has no
@@ -651,6 +959,8 @@ matchMedia('(display-mode: standalone)').addEventListener('change', e => {
   if (await pullLedger()) render();
   await reviveSession();
   render();
+  await loadJournal();
+  renderMonth();
   document.body.dataset.ready = 'true';        // triggers the one entrance
   setInterval(renderHero, 1000);
   setInterval(renderLive, 1000);
