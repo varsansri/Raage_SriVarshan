@@ -180,8 +180,10 @@ const hhmmDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? String(d) : null;
    rebuild — regenerate every derived file from the entries
    ══════════════════════════════════════════════════════════════════════ */
 function cmdRebuild(){
-  if (!fs.existsSync(ENTRIES)){ ok('no entries yet'); return { days: [] }; }
-  const metas = fs.readdirSync(ENTRIES).filter(f => f.endsWith('.json'))
+  // An empty journal must still write an empty days.json. Bailing out early
+  // left a stale derived file claiming days that no longer exist.
+  const metas = !fs.existsSync(ENTRIES) ? []
+    : fs.readdirSync(ENTRIES).filter(f => f.endsWith('.json'))
     .map(f => JSON.parse(fs.readFileSync(path.join(ENTRIES, f), 'utf8')))
     .sort((a, b) => a.id.localeCompare(b.id));
 

@@ -1,24 +1,7 @@
 {
- "generated": "2026-08-06T07:17:04.250Z",
+ "generated": "2026-08-06T07:35:33.736Z",
  "note": "DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. Self-reported numbers, not the measured ledger.",
- "totalEntries": 1,
- "totalWords": 38,
- "days": [
-  {
-   "day": "2026-08-06",
-   "entries": 1,
-   "words": 38,
-   "workedMin": 180,
-   "sleptMin": 400,
-   "woke": "06:10",
-   "mood": 6,
-   "tags": [
-    "deep-work",
-    "gym"
-   ],
-   "ids": [
-    "2026-08-06T07-05-06Z"
-   ]
-  }
- ]
+ "totalEntries": 0,
+ "totalWords": 0,
+ "days": []
 }

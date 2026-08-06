@@ -71,6 +71,42 @@ Settings → paste:
 The token lives in this device's `localStorage`. It is never committed and never
 leaves your browser except to `api.github.com`.
 
+
+## The journal
+
+The site is a view, not a form. You talk, an agent stores it.
+
+```sh
+node bin/raage.mjs save "woke around 6, groggy. three hours on the ledger bug
+then gym. worried this becomes a chore." --worked 3h --woke 06:10 --slept 6h40m
+```
+
+That one command writes the entry, rebuilds the derived files, mirrors to phone
+storage, and pushes. `AGENTS.md` is the contract every agent reads, and its
+first rule is **do not improve the words**: no summarising, no fixing spelling,
+no reflowing. Typos are data.
+
+- **The raw text is the record.** Each dump goes to its own
+  `journal/entries/<timestamp>.txt`, byte for byte, alongside a `.json` noting
+  when it was said (absolute timestamp, local clock time, timezone, which
+  agent) and its sha256.
+- **Append only, and checkable.** `raage verify` re-hashes every entry against
+  `journal/MANIFEST.txt` and exits non-zero if any bytes changed.
+- **Derived files are disposable.** `journal/days.json` and
+  `journal/days/*.md` rebuild from the entries alone. A test deletes them and
+  asserts the rebuild is byte-identical.
+- **Three copies, every save.** This repo, GitHub, and
+  `/sdcard/Raage_SriVarshan/` plus a dated `.tar.gz` in `/sdcard/Backups/`.
+
+The site reads `journal/days.json` same-origin (Pages serves this repo, so no
+token is needed to read) and draws the month: hours per day, wake times, and a
+table. There is also a paste box for when you are already looking at the site.
+
+**Self-reported numbers stay out of the measured ledger.** The ledger is
+clock-authoritative, capped and hash-chained; hours you said out loud are not.
+Letting a text dump raise the measured total would make it meaningless, so the
+two are shown separately.
+
 ## Caps (they exist to make the number believable)
 
 | Limit | Value |
@@ -107,13 +143,16 @@ carry the day they correct. `ms` on an adjustment is signed.
 | `style.css` | shape, colour, type and motion locks are documented at the top |
 | `ledger/ledger.json` | the witnessed ledger (written by the app) |
 | `test/ledger.test.mjs` | drives the real `app.js` under a stub DOM |
+| `bin/raage.mjs` | the one command agents call to record a day |
+| `AGENTS.md` | the contract: store the words, do not improve them |
+| `test/journal.test.mjs` | the storage contract, against a throwaway repo |
 
 No build step, no dependencies, no framework. Static files on GitHub Pages.
 
 ## Tests
 
 ```sh
-node test/ledger.test.mjs      # 53 assertions, no deps
+npm test                       # 89 assertions, no deps
 ```
 
 It loads the actual `app.js`, fakes the wall clock and the monotonic clock
