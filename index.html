@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>THE GRIND</title>
+<meta name="theme-color" content="#0a0a0b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="skew" class="banner hidden"></div>
+
+<main>
+
+  <header>
+    <h1>THE&nbsp;GRIND</h1>
+    <p class="deadline">until <b>13 Jul 2027</b> · no pause · no reset</p>
+  </header>
+
+  <!-- ══ THE UNSTOPPABLE COUNTDOWN ══ -->
+  <section class="hero">
+    <div class="big" id="minsLeft">—</div>
+    <div class="big-label">minutes left</div>
+    <div class="hms" id="hmsLeft">—</div>
+    <div class="bar"><div class="bar-fill" id="yearBar"></div></div>
+    <div class="bar-cap"><span id="yearPct">0%</span> of the year burned</div>
+  </section>
+
+  <!-- ══ WORKED TOTAL ══ -->
+  <section class="card">
+    <div class="row">
+      <div>
+        <div class="k">CLAIMED</div>
+        <div class="v" id="workedTotal">0m</div>
+      </div>
+      <div class="right">
+        <div class="k">OF TIME LEFT</div>
+        <div class="v dim" id="claimedPct">0.00%</div>
+      </div>
+    </div>
+
+    <div id="liveWrap" class="live hidden">
+      <div class="live-dot"></div>
+      <div class="live-time" id="liveTime">00:00:00</div>
+      <div class="live-meta" id="liveMeta">0 beats credited</div>
+    </div>
+
+    <button id="toggle" class="primary">START WORKING</button>
+    <div class="hint" id="toggleHint">server clock · 60s heartbeats · max 5h/session</div>
+  </section>
+
+  <!-- ══ TODAY / PACE ══ -->
+  <section class="card">
+    <div class="row">
+      <div>
+        <div class="k">TODAY</div>
+        <div class="v" id="todayTotal">0m</div>
+      </div>
+      <div class="right">
+        <div class="k">PACE NEEDED</div>
+        <div class="v dim" id="paceNeeded">—</div>
+      </div>
+    </div>
+    <div class="bar thin"><div class="bar-fill amber" id="todayBar"></div></div>
+    <div class="bar-cap"><span id="todayVsGoal">goal 8h</span></div>
+  </section>
+
+  <!-- ══ DAY GRID ══ -->
+  <section class="card">
+    <div class="k spread">THE REMAINING DAYS <span id="gridStat" class="dim"></span></div>
+    <div id="grid" class="grid"></div>
+    <div class="legend">
+      <span class="sw l0"></span><span class="sw l1"></span><span class="sw l2"></span><span class="sw l3"></span><span class="sw l4"></span>
+      <span class="dim">0 → 8h+</span>
+      <span class="spacer"></span>
+      <span class="dim">empty = gone forever</span>
+    </div>
+  </section>
+
+  <!-- ══ ADJUST ══ -->
+  <section class="card">
+    <div class="k">MANUAL ADJUSTMENT</div>
+    <div class="adj">
+      <div class="seg" id="adjDay">
+        <button data-off="0" class="on">Today</button>
+        <button data-off="1">Yesterday</button>
+      </div>
+      <div class="adj-row">
+        <button class="sign" id="adjSign">+</button>
+        <input id="adjH" type="number" inputmode="numeric" min="0" max="16" placeholder="0" aria-label="hours">
+        <span class="unit">h</span>
+        <input id="adjM" type="number" inputmode="numeric" min="0" max="59" placeholder="0" aria-label="minutes">
+        <span class="unit">m</span>
+      </div>
+      <input id="adjNote" type="text" maxlength="60" placeholder="why? (forgot to start…)">
+      <button id="adjApply" class="secondary">APPEND ADJUSTMENT</button>
+      <div class="hint">Today &amp; yesterday only. Max ±2h net per day. Never edits history — appends a signed correction.</div>
+    </div>
+  </section>
+
+  <!-- ══ LEDGER ══ -->
+  <section class="card">
+    <div class="k spread">LEDGER <span id="chainState" class="dim">—</span></div>
+    <div id="ledger" class="ledger"></div>
+    <div class="btn-row">
+      <button id="verify" class="ghost">VERIFY CHAIN</button>
+      <button id="push" class="ghost">PUSH TO GITHUB</button>
+    </div>
+    <div class="hint" id="syncState">not synced</div>
+  </section>
+
+  <!-- ══ SETTINGS ══ -->
+  <details class="card">
+    <summary class="k">SETTINGS</summary>
+    <div class="set">
+      <label>Daily goal (hours)
+        <input id="setGoal" type="number" min="1" max="16" step="0.5">
+      </label>
+      <label>Total goal by 13 Jul 2027 (hours)
+        <input id="setTarget" type="number" min="0" step="10">
+      </label>
+      <hr>
+      <label>GitHub repo (owner/name)
+        <input id="setRepo" type="text" placeholder="varsansri/the-grind" spellcheck="false">
+      </label>
+      <label>Fine-grained PAT · Contents: read&amp;write
+        <input id="setToken" type="password" placeholder="github_pat_…" spellcheck="false">
+      </label>
+      <div class="hint">Stored only in this device's localStorage — never committed. Every push is a git commit, so the timeline is witnessed by GitHub, not by you.</div>
+      <hr>
+      <button id="export" class="ghost">EXPORT LEDGER JSON</button>
+    </div>
+  </details>
+
+  <footer>
+    <span id="footClock">—</span> · built to be un-fakeable
+  </footer>
+
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
