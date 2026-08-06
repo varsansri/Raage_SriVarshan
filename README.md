@@ -6,8 +6,13 @@ by the person who owns it.
 
 **Live:** https://varsansri.github.io/Raage_SriVarshan/
 
-Install it to your home screen (Chrome → ⋮ → *Add to Home screen*). It's a PWA:
-runs full-screen, works offline, no app store.
+**Install it:** open the link and tap the *Install as an app* strip at the top.
+It appears once Chrome confirms the install criteria are met, and it disappears
+once installed. On iOS use Share, then *Add to Home Screen*. Firefox and Samsung
+Internet install from their own menus, and the strip says so.
+
+Installed, it runs full-screen with no browser bar, works offline, and the
+countdown survives a reinstall because it is derived from a constant.
 
 ---
 
@@ -108,7 +113,7 @@ No build step, no dependencies, no framework. Static files on GitHub Pages.
 ## Tests
 
 ```sh
-node test/ledger.test.mjs      # 45 assertions, no deps
+node test/ledger.test.mjs      # 53 assertions, no deps
 ```
 
 It loads the actual `app.js`, fakes the wall clock and the monotonic clock
