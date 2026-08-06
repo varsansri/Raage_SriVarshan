@@ -83,12 +83,17 @@ h1 .us{color:var(--amber)}
    it every frame, the entire surface shimmered. Perpetual motion the user sees
    all day is noise; the glow only needs to give the hero depth. */
 .aurora{
-  position:absolute;inset:0 -12% auto;height:300px;z-index:-1;
+  position:absolute;inset:0;height:320px;z-index:-1;
   pointer-events:none;
   background:
-    radial-gradient(46% 56% at 30% 30%,rgba(255,171,46,.22),transparent 70%),
-    radial-gradient(42% 50% at 72% 48%,rgba(120,110,255,.14),transparent 72%);
-  filter:blur(30px);
+    radial-gradient(52% 56% at 30% 34%,rgba(255,171,46,.26),transparent 70%),
+    radial-gradient(46% 50% at 72% 50%,rgba(120,110,255,.16),transparent 72%);
+  /* The mask guarantees the glow reaches zero before the hero's clip edge.
+     Without it, overflow:clip cut the blur filter's region into a visible
+     rectangle. It also replaces filter:blur(), which cost a whole extra
+     compositor pass for a gradient that is already smooth. */
+  -webkit-mask-image:radial-gradient(78% 84% at 50% 38%,#000 20%,transparent 100%);
+  mask-image:radial-gradient(78% 84% at 50% 38%,#000 20%,transparent 100%);
 }
 
 .hero-lede{
