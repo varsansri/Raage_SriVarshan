@@ -70,16 +70,20 @@ h1{
 h1 .us{color:var(--amber)}
 
 /* ── hero ─────────────────────────────────────────────────────────── */
-.hero{position:relative;text-align:center;padding:6px 0 4px;margin-bottom:26px}
+/* isolation:isolate makes .hero a stacking context. Without it the aurora's
+   z-index:-1 escapes to the root and paints behind the page background, which
+   means it renders as nothing at all. */
+.hero{position:relative;isolation:isolate;text-align:center;padding:6px 0 4px;margin-bottom:26px}
 
 /* Ambient depth. Two soft radial washes drifting on the compositor only.
    Parked whenever the page is hidden so it costs nothing in the background. */
 .aurora{
-  position:absolute;inset:-30% -20% auto;height:280px;z-index:-1;
+  position:absolute;inset:-34% -22% auto;height:320px;z-index:-1;
+  pointer-events:none;
   background:
-    radial-gradient(42% 52% at 32% 42%,rgba(255,171,46,.16),transparent 70%),
-    radial-gradient(38% 46% at 70% 56%,rgba(120,110,255,.10),transparent 72%);
-  filter:blur(28px);
+    radial-gradient(44% 54% at 32% 44%,rgba(255,171,46,.24),transparent 70%),
+    radial-gradient(40% 48% at 70% 58%,rgba(120,110,255,.15),transparent 72%);
+  filter:blur(30px);
   animation:drift 34s var(--ease-in-out) infinite alternate;
   will-change:transform;
 }
