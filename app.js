@@ -768,6 +768,7 @@ function renderTasks(){
   $('taskNote').textContent = tasks
     ? 'Ticking one off appends a done event. Nothing is ever deleted, so what you finished stays visible.'
     : 'No task list yet. Your agent creates it with raage task add.';
+  renderToday();
 }
 
 /* Append-only: a done event is added to the log, and tasks.json is patched so
@@ -802,6 +803,58 @@ document.addEventListener('click', e => {
   const b = e.target.closest('.tick');
   if (b) completeTask(b.dataset.id);
 });
+
+/* ══════════ today, on a clock ════════════════════════════════════════
+   The charts above need weeks before they say anything. This card works on
+   the first day, because it draws only what is already recorded: when you
+   got up, when you dumped, when you took the stack, when you rated yourself,
+   and what is still due before midnight. Past is grey, ahead is amber, and
+   the line between them is now.                                          */
+function renderToday(){
+  const nowMs = Time.now();
+  const day = istDay(nowMs);
+  const r = (journal?.days || []).find(d => d.day === day);
+  const nowHM = istTime(nowMs);
+  const items = [];
+
+  if (r?.woke) items.push({ at: r.woke, what: 'woke up' });
+  for (const e of r?.entriesAt || [])
+    items.push({ at: e.at, what: `dumped ${nf.format(e.w)} words`,
+                 tag: (e.sectors || []).join(' · ') });
+  if (r?.suppsAt && r?.supps?.length)
+    items.push({ at: r.suppsAt, what: 'took the stack', tag: r.supps.join(', ') });
+  for (const e of r?.energyLog || [])
+    items.push({ at: e.at, what: `rated your energy ${e.v} out of 10` });
+  for (const t of (tasks?.open || []).filter(t => t.due === day))
+    items.push({ at: t.by || null, what: t.text, tag: t.sector || '', due: true });
+
+  items.sort((a, b) => (a.at || '99:99').localeCompare(b.at || '99:99'));
+
+  $('todayStat').textContent = items.length
+    ? `${items.filter(i => !i.due).length} recorded · ${items.filter(i => i.due).length} still due`
+    : 'nothing recorded yet today';
+
+  if (!items.length){
+    $('todayLine').innerHTML = `<p class="empty">Nothing yet today. The first dump fills this.</p>`;
+    return;
+  }
+
+  let drewNow = false;
+  const rows = items.map(i => {
+    const ahead = i.due && (!i.at || i.at >= nowHM);
+    let mark = '';
+    if (!drewNow && (i.at || '99:99') > nowHM){
+      drewNow = true;
+      mark = `<div class="now"><span>${nowHM}</span></div>`;
+    }
+    return mark + `<div class="ev"${ahead ? ' data-ahead="true"' : ''}>
+      <span class="ev-t">${i.at || '--:--'}</span>
+      <span class="ev-d"><b>${escapeHtml(i.what)}</b>${
+        i.tag ? `<i>${escapeHtml(i.tag)}</i>` : ''}</span>
+    </div>`;
+  }).join('');
+  $('todayLine').innerHTML = rows + (drewNow ? '' : `<div class="now"><span>${nowHM}</span></div>`);
+}
 
 /* ══════════ sectors ══════════════════════════════════════════════════
    Four fixed sectors, so months can be compared. The number that matters is
@@ -901,6 +954,7 @@ function renderMonth(){
   drawTable(rows);
   renderEnergy(rows);
   renderSectors();
+  renderToday();
 }
 
 /* ── what the days were made of ────────────────────────────────────────
@@ -1257,7 +1311,7 @@ matchMedia('(display-mode: standalone)').addEventListener('change', e => {
   await loadTasks();
   document.body.dataset.ready = 'true';        // triggers the one entrance
   setInterval(renderHero, 1000);
-  setInterval(renderGoal, 60e3);              // days left, not seconds left
+  setInterval(() => { renderGoal(); renderToday(); }, 60e3);   // days left and the now line
   setInterval(renderLive, 1000);
   setInterval(() => { if (session){ accrue(); renderTotals(); } }, ACCRUE_EVERY);
   setInterval(() => Time.sync(), 10 * 60e3);

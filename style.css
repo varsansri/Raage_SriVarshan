@@ -494,6 +494,24 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
 .by{font-family:var(--mono);color:var(--amber);font-variant-numeric:tabular-nums}
 .empty{font-size:12.5px;color:var(--faint);line-height:1.5}
 
+/* ── the day, as it actually happened ──────────────────────────────────
+   A time column in mono so the times line up, and one hairline rail so the
+   rows read as one thread instead of four separate lists. */
+.day{display:flex;flex-direction:column}
+.ev{display:grid;grid-template-columns:5.5ch 1fr;gap:11px;align-items:baseline;
+  padding:7px 0;position:relative}
+.ev-t{font-family:var(--mono);font-size:10.5px;color:var(--faint);
+  font-variant-numeric:tabular-nums}
+.ev-d{min-width:0}
+.ev-d b{display:block;font-size:12.5px;font-weight:500;color:var(--muted);line-height:1.4}
+.ev-d i{display:block;font-style:normal;font-size:10px;color:var(--faint);margin-top:2px}
+.ev[data-ahead="true"] .ev-d b{color:var(--fg)}
+.ev[data-ahead="true"] .ev-t{color:var(--amber)}
+.now{display:flex;align-items:center;gap:9px;margin:5px 0}
+.now::after{content:"";flex:1;height:1px;background:rgba(255,171,46,.3)}
+.now span{font-family:var(--mono);font-size:9.5px;color:var(--amber);
+  font-variant-numeric:tabular-nums;letter-spacing:.04em}
+
 /* ── sectors ── */
 .sectors{display:flex;flex-direction:column;gap:10px}
 .sector-row{display:grid;grid-template-columns:minmax(0,8ch) 1fr 2.5ch minmax(0,9ch);

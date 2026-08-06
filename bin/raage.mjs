@@ -378,6 +378,10 @@ function cmdRebuild(){
       suppsAt:  last('suppsAt'),
       energyLog: list.filter(m => m.reported?.energy != null)
                      .map(m => ({ at: m.localTime, v: m.reported.energy })),
+      // When each dump actually happened, so the site can draw the day itself
+      // and not only the numbers inside it.
+      entriesAt: list.map(m => ({ at: m.localTime, w: m.words,
+                                  sectors: m.reported?.sectors || [] })),
       tags: [...new Set(list.flatMap(m => m.reported?.tags || []))],
       late: list.some(m => m.late) || undefined,
       ids: list.map(m => m.id),
