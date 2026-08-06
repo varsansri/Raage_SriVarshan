@@ -1,14 +1,20 @@
 {
- "generated": "2026-08-06T14:00:11.229Z",
+ "generated": "2026-08-06T14:42:00.561Z",
  "note": "DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. Self-reported numbers, not the measured ledger.",
- "totalEntries": 3,
- "totalWords": 2078,
+ "totalEntries": 4,
+ "totalWords": 4003,
  "days": [
   {
    "day": "2026-08-06",
-   "entries": 3,
-   "words": 2078,
+   "entries": 4,
+   "words": 4003,
    "woke": "07:30",
+   "sectors": [
+    "job",
+    "software",
+    "trading",
+    "life"
+   ],
    "supps": [
     "l-theanine x2",
     "caffeine x1",
@@ -36,12 +42,24 @@
     "mental-energy",
     "experiment",
     "walking",
-    "fuzzy"
+    "fuzzy",
+    "grand-plan",
+    "one-crore",
+    "sectors-idea",
+    "organic-over-ads",
+    "reactive-trading",
+    "beginner-content",
+    "ai-video",
+    "veo",
+    "script-swipe",
+    "fear-of-rambling",
+    "dinner"
    ],
    "ids": [
     "2026-08-06T13-41-22Z",
     "2026-08-06T13-51-54Z",
-    "2026-08-06T13-55-43Z"
+    "2026-08-06T13-55-43Z",
+    "2026-08-06T14-42-00Z"
    ]
   }
  ]
