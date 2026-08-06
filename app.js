@@ -578,9 +578,13 @@ window.addEventListener('beforeunload', () => { if (session) accrue(); });
    such event, so there we show the manual route instead. */
 let installEvent = null;
 
+/* Deliberately does NOT count minimal-ui as installed. Chrome-less contexts
+   (headless, some in-app browsers) match minimal-ui without the app being
+   installed, and wrongly hiding the install option is worse than briefly
+   offering it inside an installed window. */
 const isStandalone = () =>
   matchMedia('(display-mode: standalone)').matches ||
-  matchMedia('(display-mode: minimal-ui)').matches ||
+  matchMedia('(display-mode: fullscreen)').matches ||
   navigator.standalone === true;
 
 const isIOS = () =>
