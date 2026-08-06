@@ -1,0 +1,27 @@
+{
+  "id": "2026-08-06T15-27-09Z",
+  "day": "2026-08-06",
+  "at": "2026-08-06T15:27:09.394Z",
+  "localTime": "20:57",
+  "tz": "Asia/Kolkata",
+  "agent": "claude-code",
+  "words": 39,
+  "bytes": 188,
+  "sha256": "bf67a5f2b0d337b5ad0dc70e16849c4d87c9199b8c1992fa5a02f29d8aff14ea",
+  "reported": {
+    "workedMin": 480,
+    "hours": {
+      "job": 120,
+      "software": 180,
+      "trading": 180
+    },
+    "sectors": [
+      "job",
+      "software",
+      "trading"
+    ],
+    "tags": [
+      "content-creation"
+    ]
+  }
+}

@@ -1,13 +1,14 @@
 {
- "generated": "2026-08-06T15:21:33.910Z",
+ "generated": "2026-08-06T15:27:09.457Z",
  "note": "DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. Self-reported numbers, not the measured ledger.",
- "totalEntries": 4,
- "totalWords": 4003,
+ "totalEntries": 5,
+ "totalWords": 4042,
  "days": [
   {
    "day": "2026-08-06",
-   "entries": 4,
-   "words": 4003,
+   "entries": 5,
+   "words": 4042,
+   "workedMin": 480,
    "woke": "07:30",
    "sectors": [
     "job",
@@ -15,6 +16,11 @@
     "trading",
     "life"
    ],
+   "hours": {
+    "job": 120,
+    "software": 180,
+    "trading": 180
+   },
    "supps": [
     "l-theanine x2",
     "caffeine x1",
@@ -46,6 +52,15 @@
       "software",
       "trading",
       "life"
+     ]
+    },
+    {
+     "at": "20:57",
+     "w": 39,
+     "sectors": [
+      "job",
+      "software",
+      "trading"
      ]
     }
    ],
@@ -80,13 +95,15 @@
     "veo",
     "script-swipe",
     "fear-of-rambling",
-    "dinner"
+    "dinner",
+    "content-creation"
    ],
    "ids": [
     "2026-08-06T13-41-22Z",
     "2026-08-06T13-51-54Z",
     "2026-08-06T13-55-43Z",
-    "2026-08-06T14-42-00Z"
+    "2026-08-06T14-42-00Z",
+    "2026-08-06T15-27-09Z"
    ]
   }
  ]
