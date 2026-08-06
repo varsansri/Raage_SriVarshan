@@ -426,29 +426,40 @@ function renderTotals(){
     : `per day, over the ${daysLeft} ${plural(daysLeft,'day')} left, to reach ${cfg.targetH}h`;
 }
 
+const lvlOf = h => h >= 8 ? '4' : h >= 5 ? '3' : h >= 2 ? '2' : '1';
+
+/* A day you told the journal about, but never ran the timer for, is drawn as
+   an outline at the same level instead of a solid cell. The grid stops looking
+   empty on a day that was worked, and the measured total still means what it
+   has always meant: minutes this app watched pass. Filled = measured,
+   outlined = your word for it. */
 function renderGrid(){
   const g = $('grid');
   const map = byDay();
+  const said = new Map((journal?.days || []).map(d => [d.day, d.workedMin || 0]));
   const todayK = dayKey(Time.now());
   const cur = new Date(...GRID_FROM);
   const end = new Date(2027, 6, 13);
-  let claimed = 0, elapsed = 0;
+  let claimed = 0, selfOnly = 0, elapsed = 0;
   const frag = document.createDocumentFragment();
   while (cur <= end){
     const k = dayKey(cur.getTime());
     const ms = map.get(k) || 0, h = ms/3600e3;
+    const selfH = (said.get(k) || 0) / 60;
     const c = document.createElement('div');
     c.className = 'cell';
-    if (h > 0) c.dataset.lvl = h >= 8 ? '4' : h >= 5 ? '3' : h >= 2 ? '2' : '1';
+    if (h > 0) c.dataset.lvl = lvlOf(h);
+    else if (selfH > 0){ c.dataset.lvl = lvlOf(selfH); c.dataset.self = 'true'; }
     else if (k < todayK) c.dataset.lvl = 'lost';
     if (k === todayK) c.dataset.today = 'true';
-    c.title = `${k}: ${hm(ms)}`;
+    c.title = `${k}: ${hm(ms)} measured` + (selfH ? ` · ${hm(selfH*3600e3)} self-reported` : '');
     frag.appendChild(c);
-    if (k <= todayK){ elapsed++; if (ms > 0) claimed++; }
+    if (k <= todayK){ elapsed++; if (ms > 0) claimed++; else if (selfH > 0) selfOnly++; }
     cur.setDate(cur.getDate()+1);
   }
   g.replaceChildren(frag);
-  $('gridStat').textContent = `${claimed} of ${elapsed} ${plural(elapsed,'day')} claimed`;
+  $('gridStat').textContent = `${claimed} of ${elapsed} ${plural(elapsed,'day')} claimed` +
+    (selfOnly ? ` · ${selfOnly} self-reported` : '');
 }
 
 async function renderLedger(){
@@ -691,6 +702,7 @@ async function loadJournal(){
     if (!r.ok) throw new Error(String(r.status));
     journal = await r.json();
   } catch { journal = null; }
+  renderGrid();                 // the grid also shows self-reported days
   const n = journal?.totalEntries || 0;
   $('journalStat').textContent = n
     ? `${n} ${n === 1 ? 'entry' : 'entries'} · ${nf.format(journal.totalWords || 0)} words`
