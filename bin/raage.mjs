@@ -128,11 +128,35 @@ const sectorList = v => {
   return [...new Set(clean)];
 };
 
+/* "job=2h,software=3h,trading=3h" -> { job:120, software:180, trading:180 }.
+   Sector keys only, so the split can never total more sectors than exist. */
+function hoursSplit(v){
+  if (v == null || v === '' || v === true) return null;
+  const out = {};
+  for (const part of String(v).split(',')){
+    const [k, t] = part.split('=').map(s => (s || '').trim().toLowerCase());
+    if (!k || !t) die(`bad --hours "${part.trim()}". Use sector=duration, e.g. trading=3h`);
+    if (!SECTORS.includes(k)) die(`unknown sector "${k}" in --hours. Use: ${SECTORS.join(', ')}`);
+    const m = toMinutes(t);
+    if (m == null) die(`bad duration "${t}" in --hours`);
+    out[k] = (out[k] || 0) + m;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 /* The agent's reading of a dump. Every field is optional and a missing one
    is correct; an invented one is corruption. Nothing here is the record. */
 function readingFrom(flags){
+  const hours = hoursSplit(flags.hours);
+  const splitTotal = hours ? Object.values(hours).reduce((a,b) => a+b, 0) : null;
+  const stated = toMinutes(flags.worked);
+  // If both were given and they disagree, that is a transcription error, not
+  // something to average away.
+  if (stated != null && splitTotal != null && stated !== splitTotal)
+    die(`--worked (${stated}m) and --hours (${splitTotal}m) disagree. Fix one.`);
   const r = {
-    workedMin: toMinutes(flags.worked),
+    workedMin: stated ?? splitTotal,
+    hours,
     sleptMin:  toMinutes(flags.slept),
     woke:      hhmm(flags.woke),
     sleptAt:   hhmm(flags['slept-at'] ?? flags.sleptAt),
@@ -140,7 +164,8 @@ function readingFrom(flags){
     energy:    num(flags.energy, 1, 10),
     supps:     list(flags.supps),
     suppsAt:   hhmm(flags['supps-at'] ?? flags.suppsAt),
-    sectors:   sectorList(flags.sector ?? flags.sectors),
+    sectors:   sectorList(flags.sector ?? flags.sectors) ??
+               (hours ? Object.keys(hours) : null),   // hours imply the sector
     tags:      list(flags.tags),
   };
   for (const k of Object.keys(r)) if (r[k] == null) delete r[k];
@@ -374,6 +399,11 @@ function cmdRebuild(){
       // of the day in order, so a before/after is visible instead of only
       // the last number of the day.
       sectors:  [...new Set(list.flatMap(m => m.reported?.sectors || []))],
+      // Minutes per sector, added across the day's entries.
+      hours: list.reduce((acc, m) => {
+        for (const [k, v] of Object.entries(m.reported?.hours || {})) acc[k] = (acc[k] || 0) + v;
+        return acc;
+      }, {}),
       supps:    [...new Set(list.flatMap(m => m.reported?.supps || []))],
       suppsAt:  last('suppsAt'),
       energyLog: list.filter(m => m.reported?.energy != null)
@@ -388,6 +418,7 @@ function cmdRebuild(){
     };
     for (const k of Object.keys(rec)) if (rec[k] == null) delete rec[k];
     for (const k of ['supps','energyLog','sectors']) if (!rec[k]?.length) delete rec[k];
+    if (!Object.keys(rec.hours || {}).length) delete rec.hours;
     days.push(rec);
 
     // A readable per-day page for GitHub. Derived, so it is safe to rewrite.
@@ -527,6 +558,7 @@ The text itself is stored untouched either way.
   --mood 7         --energy 5      --tags deep-work,gym
   --supps "l-theanine x2,caffeine x1"   --supps-at 18:00
   --sector job|software|trading|life    (which part of the plan it belongs to)
+  --hours "job=2h,software=3h,trading=3h"   (splits the day; totals --worked)
   --date YYYY-MM-DD   (defaults to today; older than yesterday is marked late)
   --agent claude-code|opencode|codex
 `;

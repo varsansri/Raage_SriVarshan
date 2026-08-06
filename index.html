@@ -95,6 +95,12 @@
       <h2 class="lbl">Today so far</h2>
       <p class="lbl faint" id="todayStat"></p>
     </div>
+    <figure class="split" id="hoursSplit" hidden>
+      <figcaption id="splitCap"></figcaption>
+      <div class="split-bar" id="splitBar"></div>
+      <div class="split-keys" id="splitKeys"></div>
+    </figure>
+
     <div id="todayLine" class="day"></div>
   </section>
 
@@ -225,7 +231,7 @@
   <section class="card" id="sectorCard">
     <div class="card-head">
       <h2 class="lbl">Sectors</h2>
-      <p class="lbl faint">this month</p>
+      <p class="lbl faint" id="sectorStat">this month</p>
     </div>
     <div id="sectorRows" class="sectors"></div>
     <p class="hint">Which part of the plan each dump belonged to. A sector you have

@@ -494,6 +494,21 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
 .by{font-family:var(--mono);color:var(--amber);font-variant-numeric:tabular-nums}
 .empty{font-size:12.5px;color:var(--faint);line-height:1.5}
 
+/* ── where the hours went ──────────────────────────────────────────────
+   One bar, one segment per sector, a 2px surface gap between segments, and
+   every segment named with its hours underneath. Sorted by the fixed sector
+   order, never by size, so a sector does not change colour week to week. */
+.split{margin-bottom:20px}
+.split figcaption{font-size:11.5px;color:var(--muted);margin-bottom:9px}
+.split-bar{display:flex;height:14px;border-radius:4px;overflow:hidden;gap:2px;
+  background:rgba(255,255,255,.04)}
+.split-bar i{display:block;height:100%}
+.split-keys{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px}
+.split-key{display:inline-flex;align-items:center;gap:6px;font-size:11px;white-space:nowrap}
+.split-key b{font-weight:500;color:var(--muted)}
+.split-key em{font-style:normal;font-family:var(--mono);font-size:10.5px;color:var(--fg);
+  font-variant-numeric:tabular-nums}
+
 /* ── the day, as it actually happened ──────────────────────────────────
    A time column in mono so the times line up, and one hairline rail so the
    rows read as one thread instead of four separate lists. */
@@ -514,7 +529,8 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
 
 /* ── sectors ── */
 .sectors{display:flex;flex-direction:column;gap:10px}
-.sector-row{display:grid;grid-template-columns:minmax(0,8ch) 1fr 2.5ch minmax(0,9ch);
+/* The value column is 7ch so "3h 00m" never wraps onto a second line. */
+.sector-row{display:grid;grid-template-columns:minmax(0,8ch) 1fr 7ch minmax(0,9ch);
   align-items:center;gap:9px}
 .sector-l{font-size:12px;color:var(--fg)}
 .sector-n{font-family:var(--mono);font-size:10px;color:var(--faint);text-align:right;
@@ -547,6 +563,7 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
 .bar-l{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bar-t{height:8px;border-radius:2px;background:rgba(255,255,255,.05);overflow:hidden}
 .bar-t i{display:block;height:100%;border-radius:2px;background:var(--amber-deep)}
+.sector-row .bar-t{height:10px}
 .bar-n{font-family:var(--mono);font-size:10px;color:var(--faint);text-align:right;
   font-variant-numeric:tabular-nums}
 

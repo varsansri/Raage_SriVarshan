@@ -810,10 +810,37 @@ document.addEventListener('click', e => {
    got up, when you dumped, when you took the stack, when you rated yourself,
    and what is still due before midnight. Past is grey, ahead is amber, and
    the line between them is now.                                          */
+/* One hue, four steps, fixed per sector and never reassigned by size. The
+   three money sectors carry the amber; life is grey because it is context,
+   not a fourth business. Steps validated for CVD separation against this
+   surface; every segment is also named with its hours below the bar, so
+   colour never carries identity on its own. */
+const SECTOR_C = { job:'#8a5c14', software:'#e08a10', trading:'#ffc46b', life:'var(--muted)' };
+
+function renderHoursSplit(r){
+  const hours = r?.hours || null;
+  const parts = hours ? SECTORS.map(([k, label]) => ({ k, label, m: hours[k] || 0 }))
+                              .filter(p => p.m > 0) : [];
+  $('hoursSplit').hidden = !parts.length;
+  if (!parts.length) return;
+
+  const total = parts.reduce((a, p) => a + p.m, 0);
+  $('splitCap').textContent = `${hm(total * 60e3)} of work, self-reported`;
+  $('splitBar').innerHTML = parts.map(p =>
+    `<i style="flex:${p.m};background:${SECTOR_C[p.k]}" title="${p.label} ${hm(p.m*60e3)}"></i>`
+  ).join('');
+  $('splitKeys').innerHTML = parts.map(p => `
+    <span class="split-key">
+      <i class="sw" style="background:${SECTOR_C[p.k]}"></i>
+      <b>${p.label}</b><em>${hm(p.m * 60e3)}</em>
+    </span>`).join('');
+}
+
 function renderToday(){
   const nowMs = Time.now();
   const day = istDay(nowMs);
   const r = (journal?.days || []).find(d => d.day === day);
+  renderHoursSplit(r);
   const nowHM = istTime(nowMs);
   const items = [];
 
@@ -876,17 +903,24 @@ function renderSectors(){
     const touched = all.filter(d => (d.sectors || []).includes(key));
     const last = touched.length ? touched[touched.length - 1].day : null;
     const n = touched.filter(d => d.day.slice(0,7) === month).length;
+    const mins = all.filter(d => d.day.slice(0,7) === month)
+                    .reduce((a, d) => a + (d.hours?.[key] || 0), 0);
     const ago = last ? daysAgo(last) : null;
-    return { key, label, n, ago,
+    return { key, label, n, mins, ago,
       when: ago == null ? 'not yet' : ago === 0 ? 'today' : ago === 1 ? 'yesterday' : `${ago} days ago` };
   });
-  const max = Math.max(1, ...rows.map(r => r.n));
+  // Hours are the honest measure of attention; days touched is the fallback
+  // until any hours have been reported at all.
+  const anyHours = rows.some(r => r.mins > 0);
+  const val = r => anyHours ? r.mins : r.n;
+  const max = Math.max(1, ...rows.map(val));
 
+  $('sectorStat').textContent = anyHours ? 'hours this month' : 'days touched this month';
   $('sectorRows').innerHTML = rows.map(r => `
     <div class="sector-row"${r.ago != null && r.ago >= 3 ? ' data-cold="true"' : ''}>
       <span class="sector-l">${r.label}</span>
-      <span class="bar-t"><i style="width:${(r.n / max) * 100}%"></i></span>
-      <span class="sector-n">${r.n}</span>
+      <span class="bar-t"><i style="width:${(val(r) / max) * 100}%;background:${SECTOR_C[r.key]}"></i></span>
+      <span class="sector-n">${anyHours ? (r.mins ? hm(r.mins * 60e3) : '-') : r.n}</span>
       <span class="sector-w">${r.when}</span>
     </div>`).join('');
 }
