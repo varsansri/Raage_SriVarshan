@@ -1,10 +1,10 @@
-# THE GRIND
+# Raage_SriVarshan
 
 A countdown to **13 July 2027** that cannot be paused, plus an append-only ledger of
 every minute actually worked — built so that the number can't be inflated, not even
 by the person who owns it.
 
-**Live:** https://varsansri.github.io/the-grind/
+**Live:** https://varsansri.github.io/Raage_SriVarshan/
 
 Install it to your home screen (Chrome → ⋮ → *Add to Home screen*). It's a PWA:
 runs full-screen, works offline, no app store.
@@ -49,7 +49,7 @@ So the ledger is pushed to `ledger/ledger.json` in this repo on every change:
 
 - Each push is a **git commit**, timestamped by GitHub's servers, not yours.
 - The commit message carries the running total and the chain head:
-  `grind: 7412min · head a3f9c2d1 · 214 events`
+  `raage: 7412min · head a3f9c2d1 · 214 events`
 - To fake yesterday you'd have to force-push over a commit that already exists
   publicly, with a timestamp you don't control.
 
@@ -59,7 +59,7 @@ warns if they've diverged.
 ### Setup (one time)
 
 Settings → paste:
-- **repo** — `varsansri/the-grind`
+- **repo** — `varsansri/Raage_SriVarshan`
 - **PAT** — a [fine-grained token](https://github.com/settings/personal-access-tokens/new)
   scoped to *this repo only*, permission **Contents: Read and write**
 

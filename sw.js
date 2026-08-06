@@ -1,6 +1,6 @@
 /* Cache the shell so the countdown survives offline.
    Network-first for app files so deploys land immediately. */
-const CACHE = 'grind-v1';
+const CACHE = 'raage-v1';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js',
                'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 

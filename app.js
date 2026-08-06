@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════
-   THE GRIND — an append-only work ledger that runs until 13 Jul 2027
+   Raage_SriVarshan — an append-only work ledger that runs until 13 Jul 2027
    Design rules:
      1. Never store a total. Totals are always derived from the ledger.
      2. Never edit or delete. Corrections are new signed events.
@@ -22,6 +22,8 @@ const SKEW_LIMIT    = 120e3;        // refuse to record beyond this clock skew
 
 /* ══════════ storage ══════════ */
 const K = {
+  // key names predate the rename to Raage_SriVarshan — left alone so no
+  // already-recorded minutes are orphaned by a cosmetic change.
   chain:'grind.chain', session:'grind.session', cfg:'grind.cfg', sha:'grind.sha',
 };
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
@@ -246,7 +248,7 @@ async function pushLedger(silent){
     const r = await ghFetch('ledger/ledger.json', {
       method:'PUT',
       body: JSON.stringify({
-        message: `grind: ${Math.round(totalMs()/60e3)}min · head ${head()} · ${chain.length} events`,
+        message: `raage: ${Math.round(totalMs()/60e3)}min · head ${head()} · ${chain.length} events`,
         content: b64(body), ...(sha ? { sha } : {}),
       }),
     });
@@ -439,7 +441,7 @@ $('export').onclick = () => {
                         { type:'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `grind-ledger-${dayKey(Time.now())}.json`;
+  a.download = `raage-ledger-${dayKey(Time.now())}.json`;
   a.click();
 };
 
