@@ -1,13 +1,13 @@
 {
- "generated": "2026-08-06T13:41:22.993Z",
+ "generated": "2026-08-06T13:51:54.235Z",
  "note": "DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. Self-reported numbers, not the measured ledger.",
- "totalEntries": 1,
- "totalWords": 791,
+ "totalEntries": 2,
+ "totalWords": 1767,
  "days": [
   {
    "day": "2026-08-06",
-   "entries": 1,
-   "words": 791,
+   "entries": 2,
+   "words": 1767,
    "woke": "07:30",
    "tags": [
     "skincare",
@@ -17,10 +17,18 @@
     "youtube",
     "short-form-scroll",
     "nap",
-    "exhausted"
+    "exhausted",
+    "plans",
+    "scripts",
+    "voiceover",
+    "trading-content",
+    "instagram",
+    "friend-call",
+    "no-mental-energy"
    ],
    "ids": [
-    "2026-08-06T13-41-22Z"
+    "2026-08-06T13-41-22Z",
+    "2026-08-06T13-51-54Z"
    ]
   }
  ]
