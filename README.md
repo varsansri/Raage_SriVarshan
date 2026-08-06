@@ -100,8 +100,22 @@ carry the day they correct. `ms` on an adjustment is signed.
 | `app.js` | time authority, hash chain, session accrual, GitHub sync, render |
 | `sw.js` | offline shell |
 | `ledger/ledger.json` | the witnessed ledger (written by the app) |
+| `test/ledger.test.mjs` | drives the real `app.js` under a stub DOM |
 
 No build step, no dependencies, no framework. Static files on GitHub Pages.
+
+## Tests
+
+```sh
+node test/ledger.test.mjs      # 29 assertions, no deps
+```
+
+It loads the actual `app.js`, fakes the wall clock and the monotonic clock
+independently, and asserts the things that matter: a 3-hour phone nap credits one
+60s tick, a killed app freezes the accumulator, yanking the clock forward flags the
+session, editing or deleting any past event breaks the chain at exactly that index,
+the ±2h/day cap holds, and the day before yesterday cannot be written to even after
+the device clock jumps four days.
 
 ## Roadmap
 
