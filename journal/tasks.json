@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-06T15:02:34.090Z",
+ "generated": "2026-08-06T15:21:33.914Z",
  "note": "DERIVED FILE. Replayed from journal/tasks.log by bin/raage.mjs rebuild.",
  "today": "2026-08-06",
  "open": [
@@ -10,6 +10,15 @@
    "due": "2026-08-06",
    "by": "22:00",
    "added": "2026-08-06T14:43:20.338Z",
+   "state": "open"
+  },
+  {
+   "id": "t9",
+   "text": "rate your mental energy 1 to 10, before bed",
+   "sector": "life",
+   "due": "2026-08-06",
+   "by": "23:30",
+   "added": "2026-08-06T15:21:33.859Z",
    "state": "open"
   },
   {
