@@ -62,6 +62,7 @@ src += `;globalThis.__T={startSession,stopSession,accrue,applyAdjust,verifyChain
   getChain:()=>chain, setChain:c=>{chain=c}, totalMs, dayKey, dayTotal, Time, append,
   setAdj:(o,s)=>{adjOffset=o;adjSign=s}, getSession:()=>session, CAP_DAY,
   hm, liveMs, invalidate, extendsLocal, readAmount, verifyCached,
+  showInstall, hideInstall, isStandalone, INSTALL_COPY,
   setCfg:o=>Object.assign(cfg,o), renderTotals};`;
 new Function(src)();
 const T = globalThis.__T;
@@ -240,6 +241,29 @@ for (let i = 0; i < 30; i++) { advance(10e3); T.accrue(); }   // 5 min
 await T.stopSession(false);
 const dayMs = T.dayTotal(T.dayKey(T.Time.now()));
 ok(dayMs <= T.CAP_DAY, `day total ${(dayMs/3600e3).toFixed(2)}h never passes the 16h cap`);
+
+console.log('\n── install strip ──');
+T.hideInstall();
+ok($('installWrap').hidden === true, 'hidden until the browser says installable');
+T.showInstall('prompt');
+ok($('installWrap').hidden === false, 'shown on beforeinstallprompt');
+ok($('installTitle').textContent === 'Install as an app', 'one-tap copy');
+T.showInstall('manual');
+ok($('installWrap').dataset.mode === 'prompt', 'a real prompt is never downgraded to manual');
+T.hideInstall(); $('installWrap').dataset.mode = '';
+T.showInstall('ios');
+ok(/Add to Home Screen/.test($('installSub').textContent),
+   `iOS gets the Share route: "${$('installSub').textContent}"`);
+T.hideInstall(); $('installWrap').dataset.mode = '';
+store.delete('grind.installSeen');
+T.showInstall('manual');
+ok(/browser menu/.test($('installSub').textContent), 'other browsers get pointed at their menu');
+T.hideInstall(); $('installWrap').dataset.mode = '';
+localStorage.setItem('grind.installSeen','true');
+T.showInstall('manual');
+ok($('installWrap').hidden === true, 'manual hint does not nag once seen');
+store.delete('grind.installSeen');
+ok(T.isStandalone() === false, 'not standalone in a normal tab');
 
 console.log(`\n${'═'.repeat(46)}\n  ${pass} passed, ${fail} failed\n${'═'.repeat(46)}`);
 process.exit(fail ? 1 : 0);
