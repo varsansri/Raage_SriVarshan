@@ -337,6 +337,9 @@ details[open] .chev{transform:rotate(-135deg)}
   background:var(--danger);color:#2a0a08;font-size:12px;font-weight:600;
   padding:10px 16px;line-height:1.4;
 }
+/* An author `display` beats the UA rule for [hidden], so without this the
+   banner sits there as an empty red strip forever. */
+.banner[hidden]{display:none}
 .banner .i{width:15px;height:15px}
 
 .toast{

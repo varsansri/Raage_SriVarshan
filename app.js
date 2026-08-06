@@ -145,6 +145,7 @@ const hhmmss = ms => {
 };
 const hhmm = ms => new Date(ms).toTimeString().slice(0,5);
 const clock = ms => new Date(ms).toTimeString().slice(0,8);
+const plural = (n, w) => n === 1 ? w : w + 's';
 
 /* ══════════ session (live) ══════════ */
 function startSession(){
@@ -407,15 +408,15 @@ function renderTotals(){
   $('todayTotal').textContent = hm(today);
   setBar('todayBar', today / goal * 100);
   $('todayVsGoal').textContent = today >= goal
-    ? `goal of ${cfg.goalH}h met`
-    : `${hm(goal - today)} left of a ${cfg.goalH}h goal`;
+    ? `${cfg.goalH}h goal met`
+    : `${hm(goal - today)} left of the ${cfg.goalH}h goal`;
 
   const daysLeft = Math.max(1, Math.ceil(left/864e5));
   const remain = cfg.targetH*3600e3 - t;
   $('paceNeeded').textContent = remain <= 0 ? 'done' : `${hm(remain/daysLeft)}`;
   $('paceNote').textContent = remain <= 0
     ? `${cfg.targetH}h goal reached`
-    : `per day, for ${daysLeft} days, to reach ${cfg.targetH}h`;
+    : `per day, over the ${daysLeft} ${plural(daysLeft,'day')} left, to reach ${cfg.targetH}h`;
 }
 
 function renderGrid(){
@@ -440,7 +441,7 @@ function renderGrid(){
     cur.setDate(cur.getDate()+1);
   }
   g.replaceChildren(frag);
-  $('gridStat').textContent = `${claimed} of ${elapsed} days claimed`;
+  $('gridStat').textContent = `${claimed} of ${elapsed} ${plural(elapsed,'day')} claimed`;
 }
 
 async function renderLedger(){
