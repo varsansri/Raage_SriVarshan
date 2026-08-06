@@ -22,6 +22,13 @@ const ACCRUE_CLAMP  = 60e3;         // max credit per tick (throttle tolerance)
 const STALE_AFTER   = 5 * 60e3;     // dead session cutoff
 const SKEW_LIMIT    = 120e3;        // warn beyond this clock skew
 
+/* ══════════ install ══════════
+   The service worker is registered immediately rather than at the end of
+   boot(): Chrome will not offer to install until a worker with a fetch
+   handler is active, and boot() sits behind three network awaits. */
+if ('serviceWorker' in navigator)
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+
 /* ══════════ storage ══════════ */
 const K = {
   // key names predate the rename to Raage_SriVarshan — left alone so no
@@ -564,6 +571,65 @@ document.addEventListener('visibilitychange', async () => {
 });
 window.addEventListener('beforeunload', () => { if (session) accrue(); });
 
+
+/* ══════════ install prompt ══════════
+   Chrome fires beforeinstallprompt only when the install criteria are met, so
+   the strip is rendered from that event and is never a dead button. iOS has no
+   such event, so there we show the manual route instead. */
+let installEvent = null;
+
+const isStandalone = () =>
+  matchMedia('(display-mode: standalone)').matches ||
+  matchMedia('(display-mode: minimal-ui)').matches ||
+  navigator.standalone === true;
+
+const isIOS = () =>
+  /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function showInstall(mode){
+  if (isStandalone()) return;
+  const w = $('installWrap');
+  w.dataset.mode = mode;
+  if (mode === 'ios'){
+    $('installTitle').textContent = 'Add to your home screen';
+    $('installSub').textContent = 'Share, then "Add to Home Screen"';
+  }
+  w.hidden = false;
+}
+const hideInstall = () => { $('installWrap').hidden = true; };
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();          // keep the event so the button controls the timing
+  installEvent = e;
+  showInstall('prompt');
+});
+
+window.addEventListener('appinstalled', () => {
+  installEvent = null;
+  hideInstall();
+  toast('installed, open it from your home screen');
+});
+
+$('install').onclick = async () => {
+  if (!installEvent){
+    if (isIOS()) return toast('use Share, then Add to Home Screen');
+    return toast('your browser handles this from its own menu');
+  }
+  installEvent.prompt();
+  const { outcome } = await installEvent.userChoice;
+  installEvent = null;
+  if (outcome === 'accepted') hideInstall();
+  else toast('you can install any time from here');
+};
+
+// iOS never fires the event, and an already-installed app must not be asked
+// to install itself again.
+if (isIOS() && !isStandalone()) showInstall('ios');
+matchMedia('(display-mode: standalone)').addEventListener('change', e => {
+  if (e.matches) hideInstall();
+});
+
 /* ══════════ boot ══════════ */
 (async function boot(){
   render();
@@ -577,5 +643,4 @@ window.addEventListener('beforeunload', () => { if (session) accrue(); });
   setInterval(() => { if (session){ accrue(); renderTotals(); } }, ACCRUE_EVERY);
   setInterval(() => Time.sync(), 10 * 60e3);
   setInterval(() => { if (chain.length) pushLedger(true); }, 30 * 60e3);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();

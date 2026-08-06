@@ -38,6 +38,7 @@ globalThis.document = {
   addEventListener(){}, hidden:false, body: mkEl(),
 };
 globalThis.window = { addEventListener(){} };
+globalThis.matchMedia = () => ({ matches:false, addEventListener(){}, removeEventListener(){} });
 // node's navigator is getter-only; app.js only probes it for serviceWorker
 globalThis.confirm = () => true;
 globalThis.Blob = class {}; globalThis.URL.createObjectURL = () => '';

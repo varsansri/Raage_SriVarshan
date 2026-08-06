@@ -6,9 +6,11 @@
    Type ............ system sans for language, mono for measurement only.
                      Numbers are tabular so a 1s tick cannot shift the layout.
    Motion .......... entrance (once), session open/close, press feedback,
-                     toast, bar fills, recording beacon, ambient hero drift.
+                     toast, bar fills, recording beacon. Nothing else loops.
                      The ticking digits never animate: they are seen every
                      second of every day, and motion there would be noise.
+   Stability ....... any line whose text length changes reserves its height,
+                     so a value update can never reflow what sits below it.
    Contrast ........ every text token verified >= 4.5:1 on its own surface.
    ══════════════════════════════════════════════════════════════ */
 
@@ -38,7 +40,7 @@
 }
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html{background:var(--bg);-webkit-text-size-adjust:100%}
+html{background:var(--bg);-webkit-text-size-adjust:100%;overflow-x:clip}
 body{
   background:var(--bg);color:var(--fg);font-family:var(--sans);
   font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;
@@ -73,25 +75,21 @@ h1 .us{color:var(--amber)}
 /* isolation:isolate makes .hero a stacking context. Without it the aurora's
    z-index:-1 escapes to the root and paints behind the page background, which
    means it renders as nothing at all. */
-.hero{position:relative;isolation:isolate;text-align:center;padding:6px 0 4px;margin-bottom:26px}
+.hero{position:relative;isolation:isolate;overflow:clip;
+  text-align:center;padding:6px 0 4px;margin-bottom:26px}
 
-/* Ambient depth. Two soft radial washes drifting on the compositor only.
-   Parked whenever the page is hidden so it costs nothing in the background. */
+/* Ambient depth, deliberately STATIC. An animated version drifted underneath
+   the glass cards, and because backdrop-filter re-samples whatever is behind
+   it every frame, the entire surface shimmered. Perpetual motion the user sees
+   all day is noise; the glow only needs to give the hero depth. */
 .aurora{
-  position:absolute;inset:-34% -22% auto;height:320px;z-index:-1;
+  position:absolute;inset:0 -12% auto;height:300px;z-index:-1;
   pointer-events:none;
   background:
-    radial-gradient(44% 54% at 32% 44%,rgba(255,171,46,.24),transparent 70%),
-    radial-gradient(40% 48% at 70% 58%,rgba(120,110,255,.15),transparent 72%);
+    radial-gradient(46% 56% at 30% 30%,rgba(255,171,46,.22),transparent 70%),
+    radial-gradient(42% 50% at 72% 48%,rgba(120,110,255,.14),transparent 72%);
   filter:blur(30px);
-  animation:drift 34s var(--ease-in-out) infinite alternate;
-  will-change:transform;
 }
-@keyframes drift{
-  from{transform:translate3d(-5%,0,0) scale(1)}
-  to{transform:translate3d(5%,3%,0) scale(1.12)}
-}
-body[data-hidden="true"] .aurora{animation-play-state:paused}
 
 .hero-lede{
   font-size:13.5px;color:var(--muted);max-width:34ch;margin:0 auto 20px;
@@ -148,9 +146,13 @@ body[data-hidden="true"] .aurora{animation-play-state:paused}
   .card,details.card{background:var(--surface-solid);backdrop-filter:none;-webkit-backdrop-filter:none}
 }
 
-.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:16px}
-.pair{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;
+  gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.card-head > *{min-width:0}
+.pair{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.pair > *{min-width:0}
 .pair-end{text-align:right;flex:none}
+.stat{white-space:nowrap}
 
 .lbl{
   font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
@@ -164,6 +166,10 @@ body[data-hidden="true"] .aurora{animation-play-state:paused}
 .stat.sub{font-size:22px;font-weight:500;color:var(--muted)}
 .hint{font-size:11.5px;color:var(--faint);line-height:1.55;margin-top:12px}
 .hint.tight{margin-top:6px}
+/* Reserved so a changing value cannot push the layout around. */
+#toggleHint,#syncState{min-height:3.1em;min-height:2lh}
+#todayVsGoal,#paceNote,#gridStat{min-height:1.55em;min-height:1lh}
+.track-cap{min-height:1.55em;min-height:1lh}
 
 /* ── live session ─────────────────────────────────────────────────────
    grid-template-rows 0fr -> 1fr gives a real height transition without
@@ -194,7 +200,8 @@ body[data-hidden="true"] .aurora{animation-play-state:paused}
   font-family:var(--mono);font-size:21px;font-weight:600;color:var(--amber);
   font-variant-numeric:tabular-nums;letter-spacing:-.02em;
 }
-.live-note{font-size:11px;color:var(--muted);margin-left:auto;text-align:right;max-width:13ch}
+.live-note{font-size:11px;color:var(--muted);margin-left:auto;text-align:right;
+  width:12ch;flex:none;line-height:1.35}
 .live-note[data-warn="true"]{color:var(--amber)}
 
 /* ── buttons ──────────────────────────────────────────────────────── */
@@ -224,7 +231,8 @@ button{font-family:inherit;font-size:inherit;cursor:pointer;border:0;background:
 }
 .btn-ghost:active{transform:scale(.97);color:var(--fg);border-color:rgba(255,255,255,.24)}
 .btn-ghost.wide{width:100%;flex:none;margin-top:14px}
-.btn-row{display:flex;gap:9px;margin-top:14px}
+.btn-row{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
+.btn-ghost{min-width:132px}
 
 .i{width:15px;height:15px;flex:none;display:block}
 
@@ -296,7 +304,8 @@ input[type=number]{-moz-appearance:textfield}
 
 /* ── ledger ── */
 .chain{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);
-  font-family:var(--mono);white-space:nowrap}
+  font-family:var(--mono);min-width:0}
+.chain span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chain .i{width:13px;height:13px}
 .chain .ok{color:var(--ok)}
 .chain .bad{color:var(--danger)}
@@ -367,6 +376,51 @@ footer p{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spac
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
     transition-duration:.01ms!important}
-  .aurora{animation:none;transform:none}
   .beacon{animation:none;opacity:1}
+}
+
+/* ── install strip ────────────────────────────────────────────────────
+   Amber-tinted so it reads as the one call to action on the page, and
+   removed from the DOM flow entirely once the app is installed. */
+.install{margin:-14px 0 20px}
+.install[hidden]{display:none}
+.install-btn{
+  width:100%;display:flex;align-items:center;gap:13px;text-align:left;
+  padding:14px 15px;border-radius:var(--r-ctl);
+  background:rgba(255,171,46,.09);border:1px solid rgba(255,171,46,.24);
+  transition:transform 140ms var(--ease-out),background-color 180ms ease;
+}
+.install-btn:active{transform:scale(.985);background:rgba(255,171,46,.14)}
+.install-mark{width:19px;height:19px;color:var(--amber)}
+.install-txt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.install-txt b{font-size:13px;font-weight:600;color:var(--fg)}
+.install-txt i{font-style:normal;font-size:11.5px;color:var(--muted);line-height:1.4}
+.install-go{width:14px;height:14px;color:var(--amber);flex:none}
+.install[data-mode="ios"] .install-go{display:none}
+@media (hover:hover) and (pointer:fine){
+  .install-btn:hover{background:rgba(255,171,46,.14)}
+}
+
+/* ── responsive ───────────────────────────────────────────────────────
+   Verified at 320 / 360 / 412 / 768. The 19-column day grid is fraction
+   based, so it scales instead of wrapping. */
+@media (max-width:380px){
+  main{padding:16px 12px 28px}
+  .card,details.card{padding:15px}
+  .mins{font-size:clamp(44px,15vw,60px)}
+  .hero-lede{font-size:12.5px}
+  .stat{font-size:25px}
+  .stat.sub{font-size:19px}
+  .live-time{font-size:19px}
+  .live-note{width:10ch;font-size:10.5px}
+  .btn-ghost{min-width:0;font-size:11.5px;padding:11px 8px}
+  .le-day{width:40px}
+  .le-ms{width:66px}
+  h1{font-size:11px;letter-spacing:.2em}
+  .grid{gap:2.5px}
+}
+@media (min-width:560px){
+  main{padding:28px 20px 40px}
+  .card,details.card{padding:22px}
+  .grid{gap:4px}
 }
