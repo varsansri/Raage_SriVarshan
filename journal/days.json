@@ -1,13 +1,13 @@
 {
- "generated": "2026-08-06T13:51:54.235Z",
+ "generated": "2026-08-06T13:55:43.704Z",
  "note": "DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. Self-reported numbers, not the measured ledger.",
- "totalEntries": 2,
- "totalWords": 1767,
+ "totalEntries": 3,
+ "totalWords": 2078,
  "days": [
   {
    "day": "2026-08-06",
-   "entries": 2,
-   "words": 1767,
+   "entries": 3,
+   "words": 2078,
    "woke": "07:30",
    "tags": [
     "skincare",
@@ -24,11 +24,17 @@
     "trading-content",
     "instagram",
     "friend-call",
-    "no-mental-energy"
+    "no-mental-energy",
+    "supplements",
+    "mental-energy",
+    "experiment",
+    "walking",
+    "fuzzy"
    ],
    "ids": [
     "2026-08-06T13-41-22Z",
-    "2026-08-06T13-51-54Z"
+    "2026-08-06T13-51-54Z",
+    "2026-08-06T13-55-43Z"
    ]
   }
  ]
