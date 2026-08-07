@@ -10,10 +10,10 @@
   "sha256": "179ca73c40603bca57eb54d2156400f319034343f825c9bcfbf7b45a84bbebf1",
   "reported": {
     "sectors": [
-      "job",
-      "software",
       "trading",
-      "life"
+      "life",
+      "job",
+      "software"
     ],
     "tags": [
       "cold-calling",
@@ -26,6 +26,195 @@
       "energy-drain",
       "glutathione",
       "vitamin-c"
+    ],
+    "workedMin": 450,
+    "hours": {
+      "trading": 150,
+      "life": 240,
+      "job": 195,
+      "software": 105
+    },
+    "blocks": [
+      {
+        "from": "06:30",
+        "to": "09:00",
+        "min": 150,
+        "what": "video editing on the recorded script",
+        "sector": "trading"
+      },
+      {
+        "from": "09:00",
+        "to": "10:00",
+        "min": 60,
+        "what": "lunch, skincare and bath",
+        "sector": "life"
+      },
+      {
+        "from": "10:00",
+        "to": "12:15",
+        "min": 135,
+        "what": "the main job, the freelancing thing",
+        "sector": "job"
+      },
+      {
+        "from": "12:15",
+        "to": "13:00",
+        "min": 45,
+        "what": "gathered the leads and two cold calls",
+        "sector": "software"
+      },
+      {
+        "from": "13:30",
+        "to": "14:45",
+        "min": 75,
+        "what": "marketing and mindset videos",
+        "sector": "life"
+      },
+      {
+        "from": "14:45",
+        "to": "15:00",
+        "min": 15,
+        "what": "lunch",
+        "sector": "life"
+      },
+      {
+        "from": "15:00",
+        "to": "15:30",
+        "min": 30,
+        "what": "marketing and mindset videos",
+        "sector": "life"
+      },
+      {
+        "from": "15:30",
+        "to": "16:30",
+        "min": 60,
+        "what": "job work, shallow",
+        "sector": "job",
+        "depth": "shallow"
+      },
+      {
+        "from": "16:30",
+        "to": "17:30",
+        "min": 60,
+        "what": "working out the direction, the cold call conclusions",
+        "sector": "software"
+      },
+      {
+        "from": "17:30",
+        "to": "17:50",
+        "min": 20,
+        "what": "rest, not doing anything consciously",
+        "sector": "life"
+      },
+      {
+        "from": "18:15",
+        "to": "18:55",
+        "min": 40,
+        "what": "journaling, the brain dump",
+        "sector": "life"
+      }
     ]
-  }
+  },
+  "readings": [
+    {
+      "at": "2026-08-07T14:26:36.057Z",
+      "agent": "claude-code",
+      "set": {
+        "workedMin": 450,
+        "hours": {
+          "trading": 150,
+          "life": 240,
+          "job": 195,
+          "software": 105
+        },
+        "blocks": [
+          {
+            "from": "06:30",
+            "to": "09:00",
+            "min": 150,
+            "what": "video editing on the recorded script",
+            "sector": "trading"
+          },
+          {
+            "from": "09:00",
+            "to": "10:00",
+            "min": 60,
+            "what": "lunch, skincare and bath",
+            "sector": "life"
+          },
+          {
+            "from": "10:00",
+            "to": "12:15",
+            "min": 135,
+            "what": "the main job, the freelancing thing",
+            "sector": "job"
+          },
+          {
+            "from": "12:15",
+            "to": "13:00",
+            "min": 45,
+            "what": "gathered the leads and two cold calls",
+            "sector": "software"
+          },
+          {
+            "from": "13:30",
+            "to": "14:45",
+            "min": 75,
+            "what": "marketing and mindset videos",
+            "sector": "life"
+          },
+          {
+            "from": "14:45",
+            "to": "15:00",
+            "min": 15,
+            "what": "lunch",
+            "sector": "life"
+          },
+          {
+            "from": "15:00",
+            "to": "15:30",
+            "min": 30,
+            "what": "marketing and mindset videos",
+            "sector": "life"
+          },
+          {
+            "from": "15:30",
+            "to": "16:30",
+            "min": 60,
+            "what": "job work, shallow",
+            "sector": "job",
+            "depth": "shallow"
+          },
+          {
+            "from": "16:30",
+            "to": "17:30",
+            "min": 60,
+            "what": "working out the direction, the cold call conclusions",
+            "sector": "software"
+          },
+          {
+            "from": "17:30",
+            "to": "17:50",
+            "min": 20,
+            "what": "rest, not doing anything consciously",
+            "sector": "life"
+          },
+          {
+            "from": "18:15",
+            "to": "18:55",
+            "min": 40,
+            "what": "journaling, the brain dump",
+            "sector": "life"
+          }
+        ],
+        "sectors": [
+          "trading",
+          "life",
+          "job",
+          "software"
+        ],
+        "tags": []
+      }
+    }
+  ]
 }
