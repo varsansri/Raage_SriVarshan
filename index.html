@@ -104,6 +104,23 @@
     <div id="todayLine" class="day"></div>
   </section>
 
+  <!-- the day drawn as time, not as a list. Everything here comes from the
+       ranges he states out loud; a gap in the band is an hour nobody can
+       account for, which is a finding rather than a rendering problem. -->
+  <section class="card" id="shapeCard" hidden>
+    <div class="card-head">
+      <h2 class="lbl">The shape of the day</h2>
+      <p class="lbl faint" id="shapeStat"></p>
+    </div>
+    <div class="band">
+      <div id="shapeBand"></div>
+      <div class="band-axis" id="shapeAxis"></div>
+    </div>
+    <div class="split-keys" id="shapeKeys"></div>
+    <div id="shapeRows" class="blocks"></div>
+    <p class="hint" id="shapeNote"></p>
+  </section>
+
   <!-- ══ the one number every sector is for ══ -->
   <section class="card" id="goalCard">
     <div class="pair">
@@ -281,8 +298,9 @@
     <div class="tiles" id="tiles"></div>
 
     <figure class="fig">
-      <figcaption>Hours reported per day</figcaption>
+      <figcaption>Hours worked per day, by sector</figcaption>
       <div class="plot" id="hoursPlot"></div>
+      <div class="split-keys" id="hoursKeys"></div>
     </figure>
 
     <figure class="fig">

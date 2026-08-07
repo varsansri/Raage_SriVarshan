@@ -108,9 +108,14 @@ function parseArgs(argv){
     const a = argv[i];
     if (a.startsWith('--')){
       const [k, inline] = a.slice(2).split('=');
-      if (inline !== undefined) flags[k] = inline;
-      else if (argv[i+1] && !argv[i+1].startsWith('--')) flags[k] = argv[++i];
-      else flags[k] = true;
+      let v;
+      if (inline !== undefined) v = inline;
+      else if (argv[i+1] && !argv[i+1].startsWith('--')) v = argv[++i];
+      else v = true;
+      // A repeated flag accumulates instead of overwriting, because a day has
+      // many --block, and silently keeping only the last one would drop hours
+      // that were actually said.
+      flags[k] = k in flags ? [].concat(flags[k], v) : v;
     } else rest.push(a);
   }
   return { flags, rest };
@@ -144,19 +149,87 @@ function hoursSplit(v){
   return Object.keys(out).length ? out : null;
 }
 
+/* ── the shape of a day ────────────────────────────────────────────────
+   He does not narrate his day in totals, he narrates it in ranges: "10 to 1
+   on the job", "1.30 to 3.30", "6.30 to 9 video editing". Before this there
+   was nowhere to put that, so the richest thing in a dump was thrown away
+   and the site had nothing to draw but counts.
+
+     --block "10:00-13:00 the main job, freelancing @job"
+     --block "15:30-16:30 job work, shallow @job !shallow"
+
+   A block is the agent's reading, exactly like every other flag: it comes
+   from a range he actually said. Never invent one to fill a gap in the day.
+   An unaccounted hour is a true fact about the day and must stay a gap.  */
+const DEPTHS = ['deep', 'shallow'];
+
+function blockList(v){
+  if (v == null || v === '' || v === true) return null;
+  const out = [];
+  for (const item of [].concat(v)){
+    for (const part of String(item).split('\n')){
+      const s = part.trim();
+      if (!s) continue;
+      const m = /^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\s+(.+)$/.exec(s);
+      if (!m) die(`bad --block "${s}". Use "HH:MM-HH:MM what happened @sector"`);
+      const from = hhmm(m[1]), to = hhmm(m[2]);
+      if (!from || !to) die(`bad time in --block "${s}"`);
+      let sector = null, depth = null;
+      const what = m[3].split(/\s+/).filter(w => {
+        if (w.startsWith('@')){ sector = w.slice(1).toLowerCase(); return false; }
+        if (w.startsWith('!')){ depth  = w.slice(1).toLowerCase(); return false; }
+        return true;
+      }).join(' ').trim();
+      if (!what) die(`--block "${s}" has no description of what happened`);
+      if (sector && !SECTORS.includes(sector))
+        die(`unknown sector "${sector}" in --block. Use: ${SECTORS.join(', ')}`);
+      if (depth && !DEPTHS.includes(depth))
+        die(`unknown depth "${depth}" in --block. Use: ${DEPTHS.join(', ')}`);
+      const min = mins(to) - mins(from);
+      if (min <= 0) die(`--block "${s}" ends before it starts`);
+      out.push({ from, to, min, what, ...(sector && { sector }), ...(depth && { depth }) });
+    }
+  }
+  if (!out.length) return null;
+  out.sort((a, b) => a.from.localeCompare(b.from));
+  // Two blocks at once is a transcription error, not something to draw over.
+  for (let i = 1; i < out.length; i++)
+    if (out[i].from < out[i-1].to)
+      die(`--block "${out[i-1].from}-${out[i-1].to}" overlaps "${out[i].from}-${out[i].to}"`);
+  return out;
+}
+const mins = t => +t.slice(0,2) * 60 + +t.slice(3);
+const hm = m => m == null ? '' : `${Math.floor(m/60) ? `${Math.floor(m/60)}h` : ''}${m%60 ? `${m%60}m` : ''}` || '0m';
+
+/* Blocks imply the split. `life` is counted and drawn but is deliberately
+   NOT part of worked minutes: the three money sectors are the work, life is
+   the context around it. */
+function blockHours(blocks){
+  const h = {};
+  for (const b of blocks) if (b.sector) h[b.sector] = (h[b.sector] || 0) + b.min;
+  return Object.keys(h).length ? h : null;
+}
+const blockWorked = blocks =>
+  blocks.filter(b => b.sector && b.sector !== 'life').reduce((a, b) => a + b.min, 0) || null;
+
 /* The agent's reading of a dump. Every field is optional and a missing one
    is correct; an invented one is corruption. Nothing here is the record. */
 function readingFrom(flags){
-  const hours = hoursSplit(flags.hours);
-  const splitTotal = hours ? Object.values(hours).reduce((a,b) => a+b, 0) : null;
+  const blocks = blockList(flags.block ?? flags.blocks);
+  const given = hoursSplit(flags.hours);
+  const hours = given ?? (blocks ? blockHours(blocks) : null);
+  // Only an explicit --hours can contradict an explicit --worked. A split
+  // derived from blocks includes life, so it is not the same total.
+  const splitTotal = given ? Object.values(given).reduce((a,b) => a+b, 0) : null;
   const stated = toMinutes(flags.worked);
   // If both were given and they disagree, that is a transcription error, not
   // something to average away.
   if (stated != null && splitTotal != null && stated !== splitTotal)
     die(`--worked (${stated}m) and --hours (${splitTotal}m) disagree. Fix one.`);
   const r = {
-    workedMin: stated ?? splitTotal,
+    workedMin: stated ?? splitTotal ?? (blocks ? blockWorked(blocks) : null),
     hours,
+    blocks,
     sleptMin:  toMinutes(flags.slept),
     woke:      hhmm(flags.woke),
     sleptAt:   hhmm(flags['slept-at'] ?? flags.sleptAt),
@@ -269,8 +342,11 @@ function cmdReading(flags, rest){
   fs.writeFileSync(f, JSON.stringify(meta, null, 2) + '\n');
   fs.appendFileSync(path.join(JOURNAL, 'READINGS.log'),
     `${new Date().toISOString()}  ${id}  ${JSON.stringify(next)}\n`);
-  ok(`reading on ${id}: ` +
-     Object.entries(next).map(([k,v]) => `${k}=${Array.isArray(v)?v.join('/'):v}`).join('  '));
+  ok(`reading on ${id}: ` + Object.entries(next).map(([k, v]) =>
+       k === 'blocks' ? `blocks=${v.length} (${hm(v.reduce((a,b) => a+b.min, 0))})`
+     : Array.isArray(v) ? `${k}=${v.join('/')}`
+     : v && typeof v === 'object' ? `${k}=${Object.entries(v).map(([a,b]) => `${a} ${hm(b)}`).join('/')}`
+     : `${k}=${v}`).join('  '));
   return meta;
 }
 
@@ -385,11 +461,21 @@ function cmdRebuild(){
     const last = k => [...list].reverse().map(m => m.reported?.[k]).find(v => v != null) ?? null;
     const sum  = k => { const v = list.map(m => m.reported?.[k]).filter(n => n != null);
                         return v.length ? v.reduce((a,b) => a+b, 0) : null; };
+    // Blocks are a property of the day, not of the entry that happened to
+    // carry them, so they merge across entries and are deduped on their own
+    // identity. Once a day has any, they are the authority on its hours: two
+    // entries each reporting a blocks-derived total would otherwise count the
+    // same afternoon twice.
+    const blocks = [...new Map(list.flatMap(m => m.reported?.blocks || [])
+      .map(b => [`${b.from}|${b.to}|${b.what}`, b])).values()]
+      .sort((a, b) => a.from.localeCompare(b.from));
+
     const rec = {
       day,
       entries: list.length,
       words: list.reduce((a,m) => a + m.words, 0),
-      workedMin: sum('workedMin'),
+      blocks: blocks.length ? blocks : null,
+      workedMin: blocks.length ? blockWorked(blocks) : sum('workedMin'),
       sleptMin:  last('sleptMin'),
       woke:      last('woke'),
       sleptAt:   last('sleptAt'),
@@ -400,7 +486,7 @@ function cmdRebuild(){
       // the last number of the day.
       sectors:  [...new Set(list.flatMap(m => m.reported?.sectors || []))],
       // Minutes per sector, added across the day's entries.
-      hours: list.reduce((acc, m) => {
+      hours: blocks.length ? (blockHours(blocks) || {}) : list.reduce((acc, m) => {
         for (const [k, v] of Object.entries(m.reported?.hours || {})) acc[k] = (acc[k] || 0) + v;
         return acc;
       }, {}),
@@ -424,9 +510,21 @@ function cmdRebuild(){
     // A readable per-day page for GitHub. Derived, so it is safe to rewrite.
     const body = list.map(m => {
       const raw = fs.readFileSync(path.join(ENTRIES, `${m.id}.txt`), 'utf8');
+      // Blocks get their own lines; an object rendered into the meta line used
+      // to come out as [object Object], which is true of `hours` too.
+      const fmt = v => Array.isArray(v) ? v.join(', ')
+                     : v && typeof v === 'object'
+                       ? Object.entries(v).map(([k2,v2]) => `${k2} ${hm(v2)}`).join(', ')
+                       : v;
       const r = Object.entries(m.reported || {})
-        .map(([k,v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' · ');
-      return `## ${m.localTime}\n\n${r ? `> ${r}\n\n` : ''}${raw.trimEnd()}\n`;
+        .filter(([k]) => k !== 'blocks')
+        .map(([k,v]) => `${k}: ${fmt(v)}`).join(' · ');
+      const bl = (m.reported?.blocks || [])
+        .map(b => `> ${b.from}-${b.to}  ${b.what}` +
+                  `${b.sector ? ` (${b.sector}${b.depth ? `, ${b.depth}` : ''})` : ''}`)
+        .join('\n');
+      return `## ${m.localTime}\n\n${r ? `> ${r}\n` : ''}${bl ? `${r ? '>\n' : ''}${bl}\n` : ''}` +
+             `${r || bl ? '\n' : ''}${raw.trimEnd()}\n`;
     }).join('\n---\n\n');
     fs.writeFileSync(path.join(DAYS, `${day}.md`),
       `# ${day}\n\n_${rec.entries} ${rec.entries === 1 ? 'entry' : 'entries'}, ` +
@@ -562,6 +660,9 @@ The text itself is stored untouched either way.
   --supps "l-theanine x2,caffeine x1"   --supps-at 18:00
   --sector job|software|trading|life    (which part of the plan it belongs to)
   --hours "job=2h,software=3h,trading=3h"   (splits the day; totals --worked)
+  --block "10:00-13:00 the main job @job"   (repeatable; the shape of the day.
+        add !deep or !shallow. Blocks fill in --hours and --worked by
+        themselves, and life is counted but is not worked time.)
   --date YYYY-MM-DD   (defaults to today; older than yesterday is marked late)
   --agent claude-code|opencode|codex
 `;

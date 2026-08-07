@@ -558,6 +558,44 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
 .split-key em{font-style:normal;font-family:var(--mono);font-size:10.5px;color:var(--fg);
   font-variant-numeric:tabular-nums}
 
+/* ── the shape of the day ──────────────────────────────────────────────
+   One band, real time on the x axis, so a two hour block is twice a one hour
+   block and a hole is visibly a hole. Blocks are the only thing on the band
+   itself; the stack marker, the dumps and the now line sit in a strip above
+   it so they can never shorten a block they overlap. */
+.band{position:relative;margin-top:4px}
+.band svg{display:block;width:100%;height:38px}
+.band-axis{position:relative;height:14px;margin-top:5px}
+.band-axis span{
+  position:absolute;transform:translateX(-50%);font-family:var(--mono);
+  font-size:9.5px;color:var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.band-axis span:first-child{transform:none}
+.band-axis span:last-child{transform:translateX(-100%)}
+.sw.dim{opacity:.42}
+
+.blocks{margin-top:16px;border-top:1px solid var(--line);padding-top:4px}
+.blk{
+  display:grid;grid-template-columns:5.5ch 3px 1fr auto;gap:0 10px;
+  align-items:baseline;padding:7px 0;
+}
+.blk-t{font-family:var(--mono);font-size:10.5px;color:var(--faint);
+  font-variant-numeric:tabular-nums}
+.blk-c{align-self:stretch;border-radius:2px;background:rgba(255,255,255,.14)}
+.blk-c[data-dim="true"]{opacity:.42}
+.blk-w{font-size:12.5px;line-height:1.45;color:var(--fg);min-width:0}
+.blk-x{font-style:normal;font-size:9.5px;letter-spacing:.04em;color:var(--faint);
+  border:1px solid var(--line);border-radius:5px;padding:1px 5px;margin-left:7px;
+  white-space:nowrap}
+.blk-d{font-family:var(--mono);font-size:11px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+/* A gap is stated, not hidden: greyed, but the same row shape as real work,
+   because an unexplained 45 minutes is a fact about the day. */
+.blk[data-gap="true"] .blk-w{color:var(--faint);font-size:11.5px}
+.blk[data-gap="true"] .blk-d{color:var(--faint)}
+.blk[data-gap="true"] .blk-c{background:repeating-linear-gradient(
+  180deg,rgba(255,255,255,.16) 0 2px,transparent 2px 5px)}
+
 /* ── the day, as it actually happened ──────────────────────────────────
    A time column in mono so the times line up, and one hairline rail so the
    rows read as one thread instead of four separate lists. */

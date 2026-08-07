@@ -947,8 +947,14 @@ function renderHoursSplit(r){
   $('hoursSplit').hidden = !parts.length;
   if (!parts.length) return;
 
-  const total = parts.reduce((a, p) => a + p.m, 0);
-  $('splitCap').textContent = `${hm(total * 60e3)} of work, self-reported`;
+  // Life is drawn in the bar because it is part of the day, but it is not
+  // counted as work: three money sectors are the business, life is the
+  // context around it. Saying "12h of work" because four hours went on food
+  // and rest would be the app flattering him.
+  const worked = parts.filter(p => p.k !== 'life').reduce((a, p) => a + p.m, 0);
+  const life   = parts.filter(p => p.k === 'life').reduce((a, p) => a + p.m, 0);
+  $('splitCap').textContent = `${hm(worked * 60e3)} of work, self-reported`
+    + (life ? `, and ${hm(life * 60e3)} of life around it` : '');
   $('splitBar').innerHTML = parts.map(p =>
     `<i style="flex:${p.m};background:${SECTOR_C[p.k]}" title="${p.label} ${hm(p.m*60e3)}"></i>`
   ).join('');
@@ -1006,6 +1012,148 @@ function renderToday(){
   $('todayLine').innerHTML = rows + (drewNow ? '' : `<div class="now"><span>${nowHM}</span></div>`);
 }
 
+/* ══════════ the shape of the day ═════════════════════════════════════
+   He narrates his day in ranges, never in totals: "10 to 1 on the job",
+   "1.30 to 3.30", "6.30 to 9 video editing". `raage --block` captures those,
+   and this draws them as time rather than as a list, because the question he
+   keeps asking the record is not how many hours he worked, it is where the
+   day went.
+
+   Three deliberate choices:
+   - A gap stays a gap. The band is not backfilled to look full, so an hour
+     nobody can account for is visible as a hole and is named below.
+   - Shallow work is the same hue at lower opacity, not a second colour. It
+     is the same sector, done worse; a new hue would say it was a new thing.
+   - Life is drawn and measured but never counted as work.                */
+const clockMin = t => +t.slice(0,2) * 60 + +t.slice(3);
+const clockOf  = m => `${String(Math.floor(m/60) % 24).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+
+function renderShape(){
+  const days = journal?.days || [];
+  const today = istDay(Time.now());
+  const r = days.find(d => d.day === today && d.blocks?.length)
+         || [...days].reverse().find(d => d.blocks?.length);
+  $('shapeCard').hidden = !r;
+  if (!r) return;
+
+  const blocks = r.blocks;
+  const isToday = r.day === today;
+  const nowM = isToday ? clockMin(istTime(Time.now())) : null;
+
+  const t0 = Math.floor(Math.min(...blocks.map(b => clockMin(b.from)),
+                                 r.woke ? clockMin(r.woke) : 1440) / 60) * 60;
+  const t1 = Math.ceil(Math.max(...blocks.map(b => clockMin(b.to)), nowM ?? 0) / 60) * 60;
+  const span = Math.max(60, t1 - t0);
+  const pct = m => ((m - t0) / span) * 100;
+
+  const worked  = blocks.filter(b => b.sector && b.sector !== 'life')
+                        .reduce((a,b) => a + b.min, 0);
+  const life    = blocks.filter(b => b.sector === 'life').reduce((a,b) => a + b.min, 0);
+  const shallow = blocks.filter(b => b.depth === 'shallow').reduce((a,b) => a + b.min, 0);
+
+  // Rows, with the holes between blocks made explicit. Under ten minutes is
+  // rounding in how he speaks, not a gap worth naming.
+  const rows = [];
+  let cursor = clockMin(blocks[0].from);
+  for (const b of blocks){
+    const s = clockMin(b.from);
+    if (s - cursor >= 10) rows.push({ gap:true, from:clockOf(cursor), to:clockOf(s), min:s - cursor });
+    rows.push(b);
+    cursor = clockMin(b.to);
+  }
+  if (nowM != null && nowM - cursor >= 10)
+    rows.push({ gap:true, from:clockOf(cursor), to:clockOf(nowM), min:nowM - cursor, open:true });
+  // Only closed holes count. The stretch since the last block is the present,
+  // and calling the hour he is living in "unaccounted" would be a lie by
+  // arithmetic.
+  const unaccounted = rows.filter(x => x.gap && !x.open).reduce((a,x) => a + x.min, 0);
+  const openTail = rows.find(x => x.open)?.min || 0;
+
+  // The longest run of work with nothing in between, which is the number he
+  // actually feels: four scattered hours are not the same day as four joined.
+  let best = 0, run = 0, runEnd = null;
+  for (const b of blocks){
+    if (b.sector && b.sector !== 'life'){
+      run = runEnd === b.from ? run + b.min : b.min;
+      runEnd = b.to;
+      if (run > best) best = run;
+    } else { run = 0; runEnd = null; }
+  }
+
+  $('shapeStat').textContent = `${dayLabel(r.day)}${isToday ? ' · so far' : ''}`;
+
+  const H = 34, yB = 11, hB = H - yB - 2;
+  const bars = blocks.map(b => {
+    const x = pct(clockMin(b.from)), w = Math.max(0.5, pct(clockMin(b.to)) - x);
+    return `<rect x="${x}" y="${yB}" width="${w}" height="${hB}" rx=".7"
+      fill="${SECTOR_C[b.sector] || 'rgba(255,255,255,.14)'}"
+      fill-opacity="${b.depth === 'shallow' ? '.42' : '1'}"/>`;
+  }).join('');
+
+  // Markers sit above the band so they never eat into a block's width.
+  let marks = '';
+  if (r.suppsAt && clockMin(r.suppsAt) >= t0)
+    marks += `<rect x="${pct(clockMin(r.suppsAt)) - .25}" y="1" width=".5" height="7"
+      fill="var(--amber)"/>`;
+  for (const e of r.entriesAt || [])
+    marks += `<rect x="${pct(clockMin(e.at)) - .2}" y="4.5" width=".4" height="3.5"
+      fill="rgba(255,255,255,.34)"/>`;
+  if (nowM != null)
+    marks += `<rect x="${pct(nowM) - .15}" y="1" width=".3" height="${H - 2}" fill="var(--fg)"/>`;
+
+  const grid = [];
+  for (let m = t0; m <= t1; m += 60)
+    grid.push(`<line x1="${pct(m)}" y1="${yB}" x2="${pct(m)}" y2="${H - 2}"
+      stroke="rgba(255,255,255,.07)" stroke-width=".2"/>`);
+
+  $('shapeBand').innerHTML = `<svg viewBox="0 0 100 ${H}" preserveAspectRatio="none"
+      role="img" aria-label="The day from ${clockOf(t0)} to ${clockOf(t1)}, by sector">
+    <rect x="0" y="${yB}" width="100" height="${hB}" rx=".7" fill="rgba(255,255,255,.045)"/>
+    ${grid.join('')}${bars}${marks}
+  </svg>`;
+
+  // At most six labels, so the axis never collides with itself on a phone.
+  const step = Math.max(60, Math.ceil((span / 60) / 6) * 60);
+  const ticks = [];
+  for (let m = t0; m <= t1; m += step) ticks.push(m);
+  $('shapeAxis').innerHTML = ticks.map(m =>
+    `<span style="left:${pct(m)}%">${clockOf(m)}</span>`).join('');
+
+  const used = SECTORS.filter(([k]) => blocks.some(b => b.sector === k));
+  $('shapeKeys').innerHTML = used.map(([k, label]) => {
+    const m = blocks.filter(b => b.sector === k).reduce((a,b) => a + b.min, 0);
+    return `<span class="split-key"><i class="sw" style="background:${SECTOR_C[k]}"></i>
+      <b>${label}</b><em>${hm(m * 60e3)}</em></span>`;
+  }).join('') + (shallow ? `<span class="split-key"><i class="sw dim"></i>
+      <b>shallow</b><em>${hm(shallow * 60e3)}</em></span>` : '');
+
+  $('shapeRows').innerHTML = rows.map(x => x.gap ? `
+    <div class="blk" data-gap="true">
+      <span class="blk-t">${x.from}</span>
+      <span class="blk-c"></span>
+      <span class="blk-w">${x.open ? 'nothing recorded since' : 'unaccounted'}</span>
+      <span class="blk-d">${hm(x.min * 60e3)}</span>
+    </div>` : `
+    <div class="blk">
+      <span class="blk-t">${x.from}</span>
+      <span class="blk-c" style="background:${SECTOR_C[x.sector] || 'rgba(255,255,255,.14)'}"
+        ${x.depth === 'shallow' ? 'data-dim="true"' : ''}></span>
+      <span class="blk-w">${escapeHtml(x.what)}${
+        x.depth ? `<i class="blk-x">${x.depth}</i>` : ''}</span>
+      <span class="blk-d">${hm(x.min * 60e3)}</span>
+    </div>`).join('');
+
+  // Judgements, every one of them arithmetic on the blocks above. Nothing
+  // here is an opinion about the day, and nothing is softened either.
+  const bits = [`${hm(worked * 60e3)} of work against ${hm(life * 60e3)} of life`];
+  if (best) bits.push(`longest unbroken run ${hm(best * 60e3)}`);
+  if (shallow) bits.push(`${hm(shallow * 60e3)} of it shallow`);
+  bits.push(unaccounted ? `${hm(unaccounted * 60e3)} unaccounted` : 'no unaccounted time');
+  if (openTail) bits.push(`${hm(openTail * 60e3)} not written up yet`);
+  $('shapeNote').textContent = bits.join(' · ') + '.'
+    + ' Every block came from a time you said out loud. A gap is an hour the record cannot explain, not a drawing error.';
+}
+
 /* ══════════ sectors ══════════════════════════════════════════════════
    Four fixed sectors, so months can be compared. The number that matters is
    not the count, it is how long ago each one was last touched. */
@@ -1015,6 +1163,7 @@ const SECTORS = [
   ['trading',  'Trading'],
   ['life',     'Life'],
 ];
+const SECTOR_LABEL = Object.fromEntries(SECTORS);
 
 function renderSectors(){
   const all = journal?.days || [];
@@ -1093,10 +1242,7 @@ function renderMonth(){
     tile('Usual wake-up',  wokeVals.length ? minToClock(avg(wokeVals)) : 'none', 'average'),
   ].join('');
 
-  drawColumns($('hoursPlot'), worked, {
-    unit:'h', toLabel: v => hm(v*60e3), max: Math.max(60, ...workedVals),
-    accent:true,
-  });
+  drawStack($('hoursPlot'), rows);
   drawDots($('wakePlot'), woke, {
     toLabel: minToClock,
     lo: wokeVals.length ? Math.max(0, Math.min(...wokeVals) - 45) : 240,
@@ -1112,6 +1258,7 @@ function renderMonth(){
   renderEnergy(rows);
   renderSectors();
   renderToday();
+  renderShape();
 }
 
 /* ── what the days were made of ────────────────────────────────────────
@@ -1275,6 +1422,75 @@ const minToClock = v => {
    Mark spec: bar capped at 24px, 4px rounded top, square at the baseline,
    a 2px surface gap between neighbours, hairline recessive baseline, and
    only the largest value directly labelled. */
+/* ── hours per day, stacked by sector ──────────────────────────────────
+   The same column chart as before, split into the three money sectors. One
+   stack per day rather than three charts, because the question is which
+   sector took the day, and that is a comparison inside a day before it is a
+   comparison between days. Fixed sector order bottom to top, never sorted by
+   size, so a colour means the same thing in every column. Life is left out:
+   this chart is called hours worked, and life is not work.               */
+const MONEY = ['job', 'software', 'trading'];
+
+function drawStack(host, rows){
+  const W = 100, H = 40, base = H - 6, top = 5;
+  const n = rows.length, band = W / n;
+  const gap = Math.min(2 * (W / host.clientWidth || 0.6), band * 0.35);
+  const bw = Math.max(0.8, band - gap);
+
+  const totals = rows.map(x => MONEY.reduce((a, k) => a + (x.r?.hours?.[k] || 0), 0));
+  const max = Math.max(60, ...totals);
+  const scale = v => (v / max) * (base - top);
+  const peakI = totals.reduce((bi, v, i) => v > totals[bi] ? i : bi, 0);
+
+  let marks = '', hits = '';
+  rows.forEach((x, i) => {
+    const cx = i * band + band / 2;
+    const total = totals[i];
+    if (total > 0){
+      let y = base;
+      MONEY.forEach(k => {
+        const m = x.r?.hours?.[k] || 0;
+        if (!m) return;
+        const h = Math.max(0.5, scale(m));
+        y -= h;
+        marks += `<rect x="${cx - bw/2}" y="${y}" width="${bw}" height="${h}"
+          fill="${SECTOR_C[k]}"/>`;
+      });
+    } else if (x.r){
+      // Recorded, but no hours in it. A hairline says "this day exists and
+      // reported nothing", which is different from a day never written up.
+      marks += `<rect x="${cx - bw/2}" y="${base - 0.8}" width="${bw}" height="0.8"
+        fill="rgba(255,255,255,.14)"/>`;
+    }
+    const split = MONEY.filter(k => x.r?.hours?.[k])
+      .map(k => `${k} ${hm(x.r.hours[k] * 60e3)}`).join(', ');
+    hits += `<rect class="hit" x="${i*band}" y="${top-3}" width="${band}" height="${base-top+6}"
+      fill="transparent" data-t="${x.day} · ${
+        !x.r ? 'not recorded' : total ? `${hm(total*60e3)} · ${split}` : 'no hours reported'}"/>`;
+  });
+
+  const ticks = [max, max/2].map(v =>
+    `<line x1="0" y1="${base-scale(v)}" x2="${W}" y2="${base-scale(v)}"
+       stroke="rgba(255,255,255,.07)" stroke-width=".25"/>`).join('');
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+      role="img" aria-label="Hours worked per day, stacked by sector">
+    ${ticks}
+    <line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="rgba(255,255,255,.12)" stroke-width=".25"/>
+    ${marks}${hits}
+  </svg>
+  <div class="axis"><span>${rows[0].n}</span><span>${rows[rows.length-1].n}</span></div>
+  ${totals[peakI] ? `<p class="peak">busiest: ${rows[peakI].day.slice(5)} at ${hm(totals[peakI]*60e3)}</p>` : ''}
+  <p class="tip" hidden></p>`;
+  wireTips(host);
+
+  const month = MONEY.map(k => [k, rows.reduce((a,x) => a + (x.r?.hours?.[k] || 0), 0)])
+                     .filter(([, m]) => m > 0);
+  $('hoursKeys').innerHTML = month.map(([k, m]) => `
+    <span class="split-key"><i class="sw" style="background:${SECTOR_C[k]}"></i>
+      <b>${SECTOR_LABEL[k]}</b><em>${hm(m * 60e3)}</em></span>`).join('');
+}
+
 function drawColumns(host, rows, o){
   const W = 100, H = 40, base = H - 6, top = 5;
   const n = rows.length, band = W / n, gap = Math.min(2 * (W/host.clientWidth || 0.6), band * 0.35);

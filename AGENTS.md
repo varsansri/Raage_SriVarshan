@@ -70,6 +70,37 @@ worried this journal becomes a chore." \
 If they mention working time, still record it here — but understand it does not
 change the measured total on the site. Those are separate on purpose.
 
+## Blocks: the shape of the day, and where hours actually come from
+
+He does not say "I worked six hours". He says **"10 to 1 on the job"**, "1.30 to
+3.30", "6.30 to 9 video editing". That is an hours figure, and treating it as
+"no number given" throws away the best data in the dump. Turn every range he
+states into a block:
+
+```sh
+node bin/raage.mjs save --file /tmp/dump.txt \
+  --block "06:30-09:00 video editing for the recorded script @trading" \
+  --block "10:00-13:00 the main job, freelancing @job" \
+  --block "15:30-16:30 job work, shallow @job !shallow"
+```
+
+- Repeatable. `@sector` is one of the four. `!deep` / `!shallow` only when he
+  says which it was, and he often does ("I was doing shallow work").
+- Blocks derive `--hours` and `--worked` on their own. Do not pass those too.
+- `life` blocks are drawn and counted but are **not** worked minutes. The three
+  money sectors are the work; life is the context around it.
+- Overlapping blocks are refused, because two things at once is a
+  transcription error rather than something to draw.
+- **Never invent a block to fill a gap.** An unaccounted hour is a true fact
+  about the day and has to stay a hole in the timeline. If he says "I don't
+  know where that hour went", that is the finding.
+- Put a day's blocks on **one** entry, normally the last dump of the day, and
+  revise them with `raage reading` as more of the day is described.
+
+The site draws these as the day's timeline and as the stacked hours column for
+the month. If you skip them, both are empty and the record looks like a day
+where nothing happened.
+
 ## The goal everything hangs off
 
 **One crore rupees by 17 July 2027**, from three places and nothing else:
