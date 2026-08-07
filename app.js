@@ -709,6 +709,104 @@ async function loadJournal(){
     : 'nothing recorded yet';
 }
 
+/* ══════════ read it back ═════════════════════════════════════════════
+   The reason the journal exists: he says he forgets what he decided, and a
+   new day never starts where the last one ended. Every other card turns his
+   words into a count, an average or a bar. This one turns them back into
+   words. It renders journal/days/<date>.md, which the rebuild writes from
+   the entries and which this repo serves same-origin, so no token is needed
+   and no text passes through anything that could reword it.
+
+   A closed entry is clipped by CSS line-clamp, never by slicing the string:
+   the whole entry is always in the page, and opening it is a reveal, not a
+   fetch of "the real version". */
+let backCursor = null;                  // index into the day list, ascending
+const backCache = new Map();
+
+const DAY_FMT = new Intl.DateTimeFormat('en-GB',
+  { timeZone:'UTC', weekday:'short', day:'numeric', month:'short' });
+const dayLabel = d => DAY_FMT.format(new Date(`${d}T12:00:00Z`));
+
+function parseDayFile(md){
+  const out = [];
+  let cur = null;
+  for (const line of md.split('\n')){
+    const h = /^## (\d{1,2}:\d{2})\s*$/.exec(line);
+    if (h){ cur = { at:h[1], meta:'', paras:[] }; out.push(cur); continue; }
+    if (!cur) continue;
+    if (line.startsWith('> ')){ cur.meta = line.slice(2).trim(); continue; }
+    if (line.trim()) cur.paras.push(line);
+  }
+  return out;
+}
+
+async function loadDayFile(day){
+  if (backCache.has(day)) return backCache.get(day);
+  const r = await fetch(`./journal/days/${day}.md?t=${Date.now()}`, { cache:'no-store' });
+  if (!r.ok) throw new Error(String(r.status));
+  const parsed = parseDayFile(await r.text());
+  backCache.set(day, parsed);
+  return parsed;
+}
+
+async function renderBack(){
+  const days = (journal?.days || []).map(d => d.day);
+  const stat = $('backStat'), body = $('backBody');
+
+  if (!days.length){
+    $('backDay').textContent = 'nothing yet';
+    stat.textContent = ' ';
+    body.innerHTML = `<p class="empty">Once a day is recorded it can be read back here,
+      in full, in the words you used.</p>`;
+    $('backPrev').disabled = $('backNext').disabled = true;
+    return;
+  }
+
+  if (backCursor == null || backCursor > days.length - 1) backCursor = days.length - 1;
+  const day = days[backCursor];
+  const rec = journal.days[backCursor];
+  const today = istDay(Time.now());
+  const ago = daysBetween(day, today);
+
+  $('backDay').textContent = ago === 0 ? 'today' : ago === 1 ? 'yesterday' : dayLabel(day);
+  $('backPrev').disabled = backCursor === 0;
+  $('backNext').disabled = backCursor === days.length - 1;
+  stat.textContent = `${dayLabel(day)} · ${rec.entries} ${rec.entries === 1 ? 'entry' : 'entries'}`
+    + ` · ${nf.format(rec.words || 0)} words`;
+
+  let entries;
+  try { entries = await loadDayFile(day); }
+  catch {
+    body.innerHTML = `<p class="empty">Could not load that day's file. It is still safe in
+      journal/entries; this card only reads the rebuilt copy.</p>`;
+    return;
+  }
+  if (days[backCursor] !== day) return;        // stepped again while fetching
+
+  // Newest first: the thing he is most likely returning for is the last thing
+  // he said, and the last entry of a day is usually the conclusion of it.
+  // All closed, including the newest. A single dump runs to 3,000 words, and
+  // opening one by default made the card 8,700px tall and buried every card
+  // under it. Closed, the day reads as its own index: the time, and the
+  // sentence he opened with.
+  body.innerHTML = entries.slice().reverse().map(e => `
+    <details class="rb">
+      <summary>
+        <span class="rb-t">${escapeHtml(e.at)}</span>
+        <span class="rb-p">${escapeHtml(e.paras[0] || '')}</span>
+        <span class="chev" aria-hidden="true"></span>
+      </summary>
+      <div class="rb-body">
+        ${e.meta ? `<p class="rb-m">${escapeHtml(e.meta)}</p>` : ''}
+        ${e.paras.map(p => `<p>${escapeHtml(p)}</p>`).join('')}
+      </div>
+    </details>`).join('');
+}
+
+const stepBack = n => { backCursor = (backCursor ?? 0) + n; renderBack(); };
+$('backPrev').addEventListener('click', () => stepBack(-1));
+$('backNext').addEventListener('click', () => stepBack(1));
+
 /* ══════════ the goal ═════════════════════════════════════════════════
    One crore rupees by 17 July 2027, said out loud on 2026-08-06. It sits
    above the work because every sector below it exists to reach it. The
@@ -738,19 +836,28 @@ async function loadTasks(){
   renderTasks();
 }
 
+/* "Carried over", not "Overdue". On 2026-08-07 he set the rule that a day is
+   planned in two-day blocks: work that slips is borrowed forward, not missed,
+   because cramming one day is what makes him fail. A list that shouts at him
+   for following his own system would be the app arguing with the record. The
+   count of days it has been carried is still shown, because a thing carried
+   four times is a different fact from a thing carried once. */
 const TASK_GROUPS = [
-  ['overdue',  'Overdue'],
+  ['carried',  'Carried over'],
   ['today',    'Today'],
   ['tomorrow', 'Tomorrow'],
   ['later',    'Later'],
 ];
+
+const daysBetween = (a, b) =>
+  Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 864e5);
 
 function renderTasks(){
   const open = tasks?.open || [];
   const today = istDay(Time.now());
   const tmr = new Date(Date.parse(`${today}T12:00:00Z`) + 864e5).toISOString().slice(0,10);
   const bucket = t => !t.due ? 'later'
-    : t.due < today ? 'overdue' : t.due === today ? 'today' : t.due === tmr ? 'tomorrow' : 'later';
+    : t.due < today ? 'carried' : t.due === today ? 'today' : t.due === tmr ? 'tomorrow' : 'later';
 
   const doneToday = (tasks?.closed || []).filter(t => t.state === 'done'
     && (t.closedAt || '').slice(0,10) === new Date(Time.now()).toISOString().slice(0,10)).length;
@@ -766,19 +873,23 @@ function renderTasks(){
     $('taskList').innerHTML = TASK_GROUPS.map(([key, label]) => {
       const list = open.filter(t => bucket(t) === key);
       if (!list.length) return '';
-      return `<p class="task-h" data-k="${key}">${label}</p>` + list.map(t => `
+      return `<p class="task-h" data-k="${key}">${label}</p>` + list.map(t => {
+        const held = key === 'carried' ? daysBetween(t.due, today) : 0;
+        return `
         <div class="task" data-id="${t.id}">
           <button type="button" class="tick" data-id="${t.id}"
             aria-label="Mark done: ${escapeHtml(t.text)}"></button>
           <span class="task-t">${escapeHtml(t.text)}</span>
           <span class="task-m">${t.sector ? `<i class="sector">${escapeHtml(t.sector)}</i>` : ''}${
-            t.by ? `<i class="by">${t.by}</i>` : ''}</span>
-        </div>`).join('');
+            held ? `<i class="held"${held >= 3 ? ' data-stale="true"' : ''}>+${held}d</i>`
+                 : t.by ? `<i class="by">${t.by}</i>` : ''}</span>
+        </div>`;
+      }).join('');
     }).join('');
   }
 
   $('taskNote').textContent = tasks
-    ? 'Ticking one off appends a done event. Nothing is ever deleted, so what you finished stays visible.'
+    ? 'Work that slipped is carried forward, not marked as failed. The +days is how long it has been waiting.'
     : 'No task list yet. Your agent creates it with raage task add.';
   renderToday();
 }
@@ -1355,6 +1466,7 @@ matchMedia('(display-mode: standalone)').addEventListener('change', e => {
   await loadJournal();
   renderMonth();
   await loadTasks();
+  renderBack();
   document.body.dataset.ready = 'true';        // triggers the one entrance
   setInterval(renderHero, 1000);
   setInterval(() => { renderGoal(); renderToday(); }, 60e3);   // days left and the now line

@@ -443,6 +443,7 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
   transition:transform 140ms var(--ease-out),color 180ms ease;
 }
 .stepper button:active{transform:scale(.9);color:var(--fg)}
+.stepper button:disabled{opacity:.28;pointer-events:none}
 .stepper .i{width:12px;height:12px}
 .stepper .flip{transform:rotate(180deg)}
 .month-name{
@@ -488,7 +489,9 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
   color:var(--faint);margin:14px 0 6px;
 }
 .task-h:first-child{margin-top:0}
-.task-h[data-k="overdue"]{color:var(--amber)}
+/* Carried work is neutral, not a warning: the two-day rule says slipping is
+   the system working. Only the counter goes amber, and only past three days. */
+.task-h[data-k="carried"]{color:var(--muted)}
 .task{display:flex;align-items:flex-start;gap:10px;padding:7px 0;min-height:44px}
 .task[data-going="true"]{opacity:.4;transition:opacity 140ms var(--ease-out)}
 .tick{
@@ -503,7 +506,42 @@ textarea:focus{outline:none;border-color:rgba(255,171,46,.55)}
 .task-m i{font-style:normal;font-size:9.5px;letter-spacing:.04em}
 .sector{color:var(--faint);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
 .by{font-family:var(--mono);color:var(--amber);font-variant-numeric:tabular-nums}
+.held{font-family:var(--mono);color:var(--faint);font-variant-numeric:tabular-nums}
+.held[data-stale="true"]{color:var(--amber)}
 .empty{font-size:12.5px;color:var(--faint);line-height:1.5}
+
+/* ── read it back ──────────────────────────────────────────────────────
+   The one card on this page whose subject is language, so it is the one
+   card set for reading: 15px at 1.72, measure capped at 64ch, and paragraph
+   spacing wide enough that a 3,000 word entry is not a wall. Everything
+   else on the page is 11 to 13px because it is being scanned, not read.
+   The timestamp is mono because it is a measurement; his words never are. */
+.back{display:flex;flex-direction:column}
+.rb{border-top:1px solid var(--line)}
+.rb:first-child{border-top:0}
+.rb > summary{
+  display:flex;align-items:flex-start;gap:10px;padding:13px 0;
+  cursor:pointer;list-style:none;min-height:44px;
+}
+.rb > summary::-webkit-details-marker{display:none}
+.rb-t{
+  font-family:var(--mono);font-size:11px;color:var(--amber);flex:none;width:38px;
+  font-variant-numeric:tabular-nums;padding-top:3px;
+}
+.rb-p{
+  flex:1;min-width:0;font-size:13px;line-height:1.5;color:var(--muted);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.rb > summary .chev{flex:none;margin-top:6px}
+.rb[open] > summary{padding-bottom:4px}
+.rb[open] .rb-p{display:none}
+.rb-body{padding:0 0 20px 48px;max-width:64ch}
+.rb-body p{font-size:15px;line-height:1.72;color:var(--fg);margin-bottom:15px}
+.rb-body p:last-child{margin-bottom:0}
+.rb-body p.rb-m{
+  font-size:10.5px;line-height:1.6;color:var(--faint);letter-spacing:.02em;
+  margin-bottom:16px;
+}
 
 /* ── where the hours went ──────────────────────────────────────────────
    One bar, one segment per sector, a 2px surface gap between segments, and
@@ -618,6 +656,9 @@ tbody td:first-child{color:var(--fg)}
   .tile{padding:10px 11px}
   .tile-v{font-size:17px}
   .month-name{font-size:11px;min-width:9ch}
+  /* the indent is a luxury at 360px; the reading measure is not */
+  .rb-body{padding-left:0}
+  .rb-body p{font-size:14.5px}
   #hoursPlot svg{height:112px}
   #wakePlot svg{height:84px}
   #energyPlot svg{height:96px}

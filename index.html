@@ -198,6 +198,29 @@
       Nothing is rewritten or summarised.</p>
   </section>
 
+  <!-- the record read back. Every other card on this page turns the journal
+       into a number; this one is the only place the words themselves are the
+       visual, because the thinking is the part worth returning to. -->
+  <section class="card" id="backCard">
+    <div class="card-head">
+      <h2 class="lbl">Read it back</h2>
+      <div class="stepper">
+        <button type="button" id="backPrev" aria-label="Earlier day">
+          <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-left"/></svg>
+        </button>
+        <p class="month-name" id="backDay">&nbsp;</p>
+        <button type="button" id="backNext" aria-label="Later day">
+          <svg class="i flip" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-left"/></svg>
+        </button>
+      </div>
+    </div>
+    <p class="lbl faint" id="backStat">&nbsp;</p>
+    <div id="backBody" class="back"></div>
+    <p class="hint">Tap an entry to read the whole thing. Your own words, exactly
+      as you said them; the app never shortens or summarises one, a closed entry
+      is only clipped on screen and opening it shows every word.</p>
+  </section>
+
   <!-- the supplement experiment: does the stack actually move mental energy? -->
   <section class="card" id="energyCard">
     <div class="card-head">
