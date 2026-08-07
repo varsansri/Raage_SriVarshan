@@ -470,12 +470,22 @@ function cmdRebuild(){
       .map(b => [`${b.from}|${b.to}|${b.what}`, b])).values()]
       .sort((a, b) => a.from.localeCompare(b.from));
 
+    // Anything he stated himself outranks anything derived from blocks. On
+    // 2026-08-06 he said "8 hours of solid work, 2 on the job, 3 on hanubees,
+    // 3 on trading" after saying he could not give an accurate hour count for
+    // the day; blocks added later must not quietly overwrite that.
+    const statedHours = list.reduce((acc, m) => {
+      for (const [k, v] of Object.entries(m.reported?.hours || {})) acc[k] = (acc[k] || 0) + v;
+      return acc;
+    }, {});
+    const anyStated = Object.keys(statedHours).length > 0;
+
     const rec = {
       day,
       entries: list.length,
       words: list.reduce((a,m) => a + m.words, 0),
       blocks: blocks.length ? blocks : null,
-      workedMin: blocks.length ? blockWorked(blocks) : sum('workedMin'),
+      workedMin: sum('workedMin') ?? (blocks.length ? blockWorked(blocks) : null),
       sleptMin:  last('sleptMin'),
       woke:      last('woke'),
       sleptAt:   last('sleptAt'),
@@ -485,11 +495,9 @@ function cmdRebuild(){
       // of the day in order, so a before/after is visible instead of only
       // the last number of the day.
       sectors:  [...new Set(list.flatMap(m => m.reported?.sectors || []))],
-      // Minutes per sector, added across the day's entries.
-      hours: blocks.length ? (blockHours(blocks) || {}) : list.reduce((acc, m) => {
-        for (const [k, v] of Object.entries(m.reported?.hours || {})) acc[k] = (acc[k] || 0) + v;
-        return acc;
-      }, {}),
+      // Minutes per sector, added across the day's entries. Blocks fill this
+      // in only when he never gave a split himself.
+      hours: anyStated ? statedHours : (blocks.length ? (blockHours(blocks) || {}) : {}),
       supps:    [...new Set(list.flatMap(m => m.reported?.supps || []))],
       suppsAt:  last('suppsAt'),
       energyLog: list.filter(m => m.reported?.energy != null)
