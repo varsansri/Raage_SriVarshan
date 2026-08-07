@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-07T13:28:15.688Z",
+ "generated": "2026-08-07T13:28:22.299Z",
  "note": "DERIVED FILE. Replayed from journal/tasks.log by bin/raage.mjs rebuild.",
  "today": "2026-08-07",
  "open": [
@@ -46,6 +46,15 @@
    "due": "2026-08-06",
    "by": null,
    "added": "2026-08-06T14:43:21.859Z",
+   "state": "open"
+  },
+  {
+   "id": "t12",
+   "text": "give an update around 10.30 or 11 o'clock or even 11.30",
+   "sector": "life",
+   "due": "2026-08-07",
+   "by": "23:30",
+   "added": "2026-08-07T13:28:22.263Z",
    "state": "open"
   },
   {
