@@ -1,8 +1,8 @@
 {
- "generated": "2026-08-06T15:27:09.457Z",
+ "generated": "2026-08-07T04:22:04.125Z",
  "note": "DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. Self-reported numbers, not the measured ledger.",
- "totalEntries": 5,
- "totalWords": 4042,
+ "totalEntries": 6,
+ "totalWords": 4567,
  "days": [
   {
    "day": "2026-08-06",
@@ -104,6 +104,39 @@
     "2026-08-06T13-55-43Z",
     "2026-08-06T14-42-00Z",
     "2026-08-06T15-27-09Z"
+   ]
+  },
+  {
+   "day": "2026-08-07",
+   "entries": 1,
+   "words": 525,
+   "sleptMin": 360,
+   "woke": "06:30",
+   "sectors": [
+    "trading",
+    "software",
+    "life"
+   ],
+   "entriesAt": [
+    {
+     "at": "09:52",
+     "w": 525,
+     "sectors": [
+      "trading",
+      "software",
+      "life"
+     ]
+    }
+   ],
+   "tags": [
+    "content-creation",
+    "video-editing",
+    "seo",
+    "sleep",
+    "supplements"
+   ],
+   "ids": [
+    "2026-08-07T04-22-04Z"
    ]
   }
  ]
