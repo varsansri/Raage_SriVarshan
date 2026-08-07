@@ -1,8 +1,8 @@
 {
- "generated": "2026-08-07T04:22:04.125Z",
+ "generated": "2026-08-07T13:25:46.471Z",
  "note": "DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. Self-reported numbers, not the measured ledger.",
- "totalEntries": 6,
- "totalWords": 4567,
+ "totalEntries": 7,
+ "totalWords": 7681,
  "days": [
   {
    "day": "2026-08-06",
@@ -108,14 +108,15 @@
   },
   {
    "day": "2026-08-07",
-   "entries": 1,
-   "words": 525,
+   "entries": 2,
+   "words": 3639,
    "sleptMin": 360,
    "woke": "06:30",
    "sectors": [
     "trading",
     "software",
-    "life"
+    "life",
+    "job"
    ],
    "entriesAt": [
     {
@@ -126,6 +127,16 @@
       "software",
       "life"
      ]
+    },
+    {
+     "at": "18:55",
+     "w": 3114,
+     "sectors": [
+      "job",
+      "software",
+      "trading",
+      "life"
+     ]
     }
    ],
    "tags": [
@@ -133,10 +144,21 @@
     "video-editing",
     "seo",
     "sleep",
-    "supplements"
+    "supplements",
+    "cold-calling",
+    "leads",
+    "freelancing",
+    "competitor-research",
+    "positioning",
+    "instagram-engagement",
+    "marketing-videos",
+    "energy-drain",
+    "glutathione",
+    "vitamin-c"
    ],
    "ids": [
-    "2026-08-07T04-22-04Z"
+    "2026-08-07T04-22-04Z",
+    "2026-08-07T13-25-46Z"
    ]
   }
  ]
