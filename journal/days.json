@@ -1,8 +1,8 @@
 {
- "generated": "2026-08-07T13:25:46.471Z",
+ "generated": "2026-08-07T13:27:37.537Z",
  "note": "DERIVED FILE. Rebuilt from journal/entries/ by bin/raage.mjs rebuild. Self-reported numbers, not the measured ledger.",
- "totalEntries": 7,
- "totalWords": 7681,
+ "totalEntries": 8,
+ "totalWords": 10184,
  "days": [
   {
    "day": "2026-08-06",
@@ -108,8 +108,8 @@
   },
   {
    "day": "2026-08-07",
-   "entries": 2,
-   "words": 3639,
+   "entries": 3,
+   "words": 6142,
    "sleptMin": 360,
    "woke": "06:30",
    "sectors": [
@@ -118,6 +118,13 @@
     "life",
     "job"
    ],
+   "supps": [
+    "creatine 1 scoop 5g",
+    "l-theanine x2",
+    "alpha-gpc x2",
+    "caffeine x1"
+   ],
+   "suppsAt": "16:30",
    "entriesAt": [
     {
      "at": "09:52",
@@ -134,6 +141,16 @@
      "sectors": [
       "job",
       "software",
+      "trading",
+      "life"
+     ]
+    },
+    {
+     "at": "18:57",
+     "w": 2503,
+     "sectors": [
+      "software",
+      "job",
       "trading",
       "life"
      ]
@@ -154,11 +171,19 @@
     "marketing-videos",
     "energy-drain",
     "glutathione",
-    "vitamin-c"
+    "vitamin-c",
+    "hanubees-plan",
+    "subcontracting",
+    "foreign-clients",
+    "outsourcing",
+    "youtube-shorts",
+    "two-day-scheduling",
+    "cognitive-stack"
    ],
    "ids": [
     "2026-08-07T04-22-04Z",
-    "2026-08-07T13-25-46Z"
+    "2026-08-07T13-25-46Z",
+    "2026-08-07T13-27-37Z"
    ]
   }
  ]
