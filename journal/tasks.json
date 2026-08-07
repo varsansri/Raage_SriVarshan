@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-07T13:28:07.130Z",
+ "generated": "2026-08-07T13:28:15.688Z",
  "note": "DERIVED FILE. Replayed from journal/tasks.log by bin/raage.mjs rebuild.",
  "today": "2026-08-07",
  "open": [
@@ -91,6 +91,15 @@
    "due": "2026-08-07",
    "by": null,
    "added": "2026-08-07T13:28:06.914Z",
+   "state": "open"
+  },
+  {
+   "id": "t11",
+   "text": "ask a lot of questions to AI about SEO traffic and many other things",
+   "sector": "software",
+   "due": "2026-08-07",
+   "by": null,
+   "added": "2026-08-07T13:28:15.660Z",
    "state": "open"
   }
  ],
